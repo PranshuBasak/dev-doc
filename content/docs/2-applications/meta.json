@@ -1,0 +1,8 @@
+{
+  "title": "🛍️ Applications",
+  "description": "Client and admin application features and implementation",
+  "pages": [
+    "client-app",
+    "admin-panel"
+  ]
+}

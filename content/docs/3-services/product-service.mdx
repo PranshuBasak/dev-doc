@@ -1,0 +1,456 @@
+---
+title: Product Service
+description: Manages product catalog, inventory, and category data with PostgreSQL
+---
+
+# Product Service
+
+The Product Service is a core backend service responsible for managing all product-related data and operations in the e-commerce platform. Built with Express.js and TypeScript, it provides RESTful APIs for product CRUD operations and integrates with PostgreSQL via Prisma ORM.
+
+## 🛠️ Technology Stack
+
+- **Runtime**: Node.js 18+
+- **Framework**: Express.js with TypeScript
+- **Database**: PostgreSQL with Prisma ORM
+- **Validation**: Zod for runtime type checking
+- **Error Handling**: Custom error classes and middleware
+- **Logging**: Winston for structured logging
+- **Events**: Kafka producer for event publishing
+- **CORS**: Configurable cross-origin resource sharing
+
+## 🏗️ Architecture
+
+### Service Structure
+```
+apps/product-service/
+├── src/
+│   ├── controllers/     # Request handlers
+│   ├── middleware/      # Custom middleware
+│   ├── routes/          # Route definitions
+│   ├── utils/           # Utility functions
+│   ├── index.ts         # Application entry point
+│   └── types/           # Local type definitions
+├── prisma/
+│   └── schema.prisma    # Database schema
+└── package.json
+```
+
+### Database Schema
+```prisma
+model Product {
+  id               Int      @id @default(autoincrement())
+  name             String
+  shortDescription String
+  description      String
+  price            Int
+  sizes            String[] // Array of available sizes
+  colors           String[] // Array of available colors
+  images           Json     // Object mapping colors to image URLs
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  categorySlug     String
+  category         Category @relation(fields: [categorySlug], references: [slug])
+}
+
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String
+  slug     String    @unique
+  products Product[]
+}
+```
+
+## 🔧 Core Functionality
+
+### Product Management
+
+#### Create Product
+Creates a new product with validation and publishes events to Kafka.
+
+**Endpoint**: `POST /api/products`
+
+**Request Body**:
+```typescript
+{
+  name: string;
+  shortDescription: string;
+  description: string;
+  price: number;
+  categorySlug: string;
+  sizes: string[];
+  colors: string[];
+  images: Record<string, string>; // color -> imageUrl mapping
+}
+```
+
+**Response**:
+```typescript
+{
+  id: number;
+  name: string;
+  shortDescription: string;
+  description: string;
+  price: number;
+  categorySlug: string;
+  sizes: string[];
+  colors: string[];
+  images: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+#### Get Products
+Retrieves products with advanced filtering, sorting, and pagination.
+
+**Endpoint**: `GET /api/products`
+
+**Query Parameters**:
+- `page?: number` - Page number for pagination
+- `limit?: number` - Items per page (default: 20)
+- `category?: string` - Filter by category slug
+- `minPrice?: number` - Minimum price filter
+- `maxPrice?: number` - Maximum price filter
+- `sizes?: string` - Comma-separated sizes filter
+- `colors?: string` - Comma-separated colors filter
+- `search?: string` - Search in name and description
+- `sortBy?: 'name' | 'price' | 'createdAt'` - Sort field
+- `sortOrder?: 'asc' | 'desc'` - Sort direction
+
+**Response**:
+```typescript
+{
+  products: Product[];
+  totalCount: number;
+  currentPage: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+```
+
+#### Get Product by ID
+Retrieves a single product with full details.
+
+**Endpoint**: `GET /api/products/:id`
+
+**Response**: Single product object with category information
+
+#### Update Product
+Updates an existing product with partial data.
+
+**Endpoint**: `PUT /api/products/:id`
+
+**Request Body**: Partial product data (same structure as create)
+
+#### Delete Product
+Soft deletes a product (marks as inactive).
+
+**Endpoint**: `DELETE /api/products/:id`
+
+### Category Management
+
+#### Get Categories
+Retrieves all product categories.
+
+**Endpoint**: `GET /api/categories`
+
+**Response**:
+```typescript
+[
+  {
+    id: number;
+    name: string;
+    slug: string;
+    _count: {
+      products: number;
+    };
+  }
+]
+```
+
+#### Create Category
+Creates a new product category.
+
+**Endpoint**: `POST /api/categories`
+
+**Request Body**:
+```typescript
+{
+  name: string;
+  slug: string;
+}
+```
+
+#### Update Category
+Updates an existing category.
+
+**Endpoint**: `PUT /api/categories/:id`
+
+#### Delete Category
+Deletes a category and reassigns products.
+
+**Endpoint**: `DELETE /api/categories/:id`
+
+## 🔄 Event Publishing
+
+The Product Service publishes events to Kafka for other services to consume:
+
+### Product Events
+
+#### product.created
+Published when a new product is created.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'product.created';
+  timestamp: string;
+  data: {
+    id: number;
+    name: string;
+    price: number;
+    categorySlug: string;
+    sizes: string[];
+    colors: string[];
+    images: Record<string, string>;
+  };
+}
+```
+
+#### product.updated
+Published when a product is updated.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'product.updated';
+  timestamp: string;
+  data: {
+    id: number;
+    changes: Partial<Product>;
+  };
+}
+```
+
+#### product.deleted
+Published when a product is deleted.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'product.deleted';
+  timestamp: string;
+  data: {
+    id: number;
+    name: string;
+  };
+}
+```
+
+#### category.created
+Published when a new category is created.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'category.created';
+  timestamp: string;
+  data: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+}
+```
+
+## 🛡️ Validation & Error Handling
+
+### Input Validation
+All endpoints use Zod schemas for runtime validation:
+
+```typescript
+import { z } from 'zod';
+
+export const CreateProductSchema = z.object({
+  name: z.string().min(1, "Product name is required!"),
+  shortDescription: z.string().min(1).max(60),
+  description: z.string().min(1),
+  price: z.number().min(0.01, "Price must be greater than 0"),
+  categorySlug: z.string().min(1, "Category is required!"),
+  sizes: z.array(z.string()).min(1, "At least one size is required!"),
+  colors: z.array(z.string()).min(1, "At least one color is required!"),
+  images: z.record(z.string(), z.string()).refine(
+    (images, ctx) => {
+      // Custom validation logic
+    },
+    "Image is required for each selected color!"
+  ),
+});
+```
+
+### Error Handling Middleware
+```typescript
+// Global error handler
+app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
+  if (error instanceof ValidationError) {
+    return res.status(400).json({
+      error: 'Validation Error',
+      details: error.errors,
+    });
+  }
+
+  if (error instanceof NotFoundError) {
+    return res.status(404).json({
+      error: 'Resource Not Found',
+      message: error.message,
+    });
+  }
+
+  // Log unexpected errors
+  logger.error('Unexpected error:', error);
+
+  res.status(500).json({
+    error: 'Internal Server Error',
+  });
+});
+```
+
+## 🚀 Performance & Scalability
+
+### Database Optimization
+- **Indexing**: Optimized indexes on frequently queried fields
+- **Connection Pooling**: Efficient database connection management
+- **Query Optimization**: Minimized N+1 queries with proper joins
+
+### Caching Strategy
+- **Redis Integration**: Cache frequently accessed products (future)
+- **Response Caching**: HTTP-level caching for static data
+
+### Rate Limiting
+- **API Rate Limiting**: Prevent abuse with configurable limits
+- **IP-based Limiting**: Per-IP request throttling
+
+## 🔒 Security
+
+### Input Sanitization
+- **SQL Injection Prevention**: Parameterized queries with Prisma
+- **XSS Prevention**: Input sanitization and validation
+- **CSRF Protection**: Token-based CSRF protection
+
+### Authentication
+- **JWT Validation**: Verify JWT tokens from client applications
+- **Service-to-Service Auth**: Internal API authentication
+
+## 📊 Monitoring & Logging
+
+### Structured Logging
+```typescript
+// Request logging middleware
+app.use((req, res, next) => {
+  logger.info('Incoming request', {
+    method: req.method,
+    url: req.url,
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+  });
+  next();
+});
+```
+
+### Metrics Collection
+- **Response Times**: Track API response times
+- **Error Rates**: Monitor error frequency by endpoint
+- **Database Performance**: Query performance metrics
+
+## 🔧 Development & Deployment
+
+### Environment Configuration
+```bash
+# Required environment variables
+DATABASE_URL=postgresql://user:pass@localhost:5432/ecom_prod
+KAFKA_BROKERS=localhost:9092
+JWT_SECRET=your-secret-key
+PORT=3001
+```
+
+### Development Setup
+```bash
+# Install dependencies
+pnpm install
+
+# Generate Prisma client
+pnpm db:generate
+
+# Run database migrations
+pnpm db:migrate
+
+# Start development server
+pnpm dev
+```
+
+### Docker Configuration
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm db:generate
+EXPOSE 3001
+CMD ["pnpm", "start"]
+```
+
+## 🧪 Testing
+
+### Test Structure
+- **Unit Tests**: Individual function and method testing
+- **Integration Tests**: API endpoint testing with test database
+- **E2E Tests**: Full workflow testing across services
+
+### Test Examples
+```typescript
+describe('Product Service', () => {
+  describe('POST /api/products', () => {
+    it('should create a product successfully', async () => {
+      const productData = {
+        name: 'Test Product',
+        shortDescription: 'A test product',
+        description: 'Detailed description',
+        price: 29.99,
+        categorySlug: 'test-category',
+        sizes: ['M', 'L'],
+        colors: ['red', 'blue'],
+        images: { red: 'red.jpg', blue: 'blue.jpg' },
+      };
+
+      const response = await request(app)
+        .post('/api/products')
+        .send(productData)
+        .expect(201);
+
+      expect(response.body).toMatchObject(productData);
+    });
+  });
+});
+```
+
+## 🔮 Future Enhancements
+
+### Planned Features
+- **Product Search**: Full-text search with Elasticsearch
+- **Inventory Management**: Stock tracking and low inventory alerts
+- **Product Reviews**: Customer review aggregation and management
+- **Bulk Operations**: Import/export products via CSV
+- **Image Optimization**: Automatic image resizing and WebP conversion
+- **Product Analytics**: Detailed product performance metrics
+
+### Performance Improvements
+- **Database Sharding**: Horizontal database scaling
+- **CDN Integration**: Static asset delivery via CDN
+- **Advanced Caching**: Multi-level caching strategy
+- **API Versioning**: Backward-compatible API evolution

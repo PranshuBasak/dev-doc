@@ -1,0 +1,438 @@
+---
+title: Authentication Service
+description: Centralized user authentication and management using Clerk
+---
+
+# Authentication Service
+
+The Authentication Service provides centralized user authentication and management for all applications in the e-commerce platform. Built with Express.js and integrated with Clerk, it handles user CRUD operations and publishes user events to Kafka.
+
+## 🛠️ Technology Stack
+
+- **Runtime**: Node.js 18+
+- **Framework**: Express.js with TypeScript
+- **Authentication**: Clerk API for user management
+- **Validation**: Zod for runtime type checking
+- **Events**: Kafka producer for user events
+- **Error Handling**: Custom error classes and global error handler
+- **Logging**: Winston for structured logging
+- **Security**: JWT token validation and secure API design
+
+## 🏗️ Architecture
+
+### Service Structure
+```
+apps/auth-service/
+├── src/
+│   ├── controllers/     # Request handlers
+│   ├── middleware/      # Custom middleware
+│   ├── routes/          # Route definitions
+│   ├── services/        # Business logic services
+│   ├── utils/           # Utility functions
+│   ├── index.ts         # Application entry point
+│   └── types/           # Local type definitions
+├── middleware/          # Custom middleware functions
+├── package.json
+```
+
+### Key Components
+- **User Controller**: Handles user CRUD operations
+- **Auth Middleware**: JWT token validation
+- **Event Publisher**: Publishes user events to Kafka
+- **Clerk Integration**: Manages Clerk API interactions
+
+## 🔧 Core Functionality
+
+### User Management
+
+#### Get Users
+Retrieves all users with pagination and filtering.
+
+**Endpoint**: `GET /api/users`
+
+**Query Parameters**:
+- `page?: number` - Page number for pagination
+- `limit?: number` - Items per page (default: 20)
+- `search?: string` - Search in email, first name, last name
+- `role?: 'admin' | 'user'` - Filter by user role
+
+**Response**:
+```typescript
+{
+  users: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    emailAddress: string[];
+    role: 'admin' | 'user';
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  totalCount: number;
+  currentPage: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+```
+
+#### Get User by ID
+Retrieves a specific user by ID.
+
+**Endpoint**: `GET /api/users/:userId`
+
+**Response**:
+```typescript
+{
+  id: string;
+  firstName: string;
+  lastName: string;
+  emailAddress: string[];
+  role: 'admin' | 'user';
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+#### Create User
+Creates a new user through Clerk.
+
+**Endpoint**: `POST /api/users`
+
+**Request Body**:
+```typescript
+{
+  firstName: string;
+  lastName: string;
+  username: string;
+  emailAddress: string[];
+  password: string;
+}
+```
+
+**Response**:
+```typescript
+{
+  id: string;
+  firstName: string;
+  lastName: string;
+  emailAddress: string[];
+  role: 'admin' | 'user';
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+#### Update User
+Updates an existing user's information.
+
+**Endpoint**: `PUT /api/users/:userId`
+
+**Request Body**: Partial user data (same structure as create)
+
+#### Delete User
+Deletes a user account.
+
+**Endpoint**: `DELETE /api/users/:userId`
+
+### Authentication Middleware
+
+#### JWT Validation
+Validates JWT tokens from client applications.
+
+```typescript
+// Middleware for protecting routes
+export const authenticateToken = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({ error: 'Access token required' });
+    }
+
+    // Verify token with Clerk
+    const payload = await clerk.verifyToken(token);
+
+    req.user = {
+      id: payload.sub,
+      role: payload.metadata?.role || 'user',
+    };
+
+    next();
+  } catch (error) {
+    return res.status(403).json({ error: 'Invalid token' });
+  }
+};
+```
+
+#### Admin Authorization
+Middleware for admin-only routes.
+
+```typescript
+export const requireAdmin = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+```
+
+## 🔄 Event Publishing
+
+The Authentication Service publishes user events to Kafka:
+
+### User Events
+
+#### user.created
+Published when a new user is created.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'user.created';
+  timestamp: string;
+  data: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    emailAddress: string[];
+    role: 'admin' | 'user';
+  };
+}
+```
+
+#### user.updated
+Published when a user is updated.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'user.updated';
+  timestamp: string;
+  data: {
+    id: string;
+    changes: Partial<User>;
+  };
+}
+```
+
+#### user.deleted
+Published when a user is deleted.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'user.deleted';
+  timestamp: string;
+  data: {
+    id: string;
+    emailAddress: string[];
+  };
+}
+```
+
+## 🛡️ Security Features
+
+### Input Validation
+```typescript
+import { z } from 'zod';
+
+export const CreateUserSchema = z.object({
+  firstName: z.string().min(2).max(50),
+  lastName: z.string().min(2).max(50),
+  username: z.string().min(2).max(50),
+  emailAddress: z.array(z.string().email()),
+  password: z.string().min(8).max(50),
+});
+
+export const UpdateUserSchema = CreateUserSchema.partial();
+```
+
+### Error Handling
+```typescript
+// Custom error classes
+export class UserNotFoundError extends Error {
+  constructor(userId: string) {
+    super(`User with ID ${userId} not found`);
+    this.name = 'UserNotFoundError';
+  }
+}
+
+export class InvalidCredentialsError extends Error {
+  constructor() {
+    super('Invalid email or password');
+    this.name = 'InvalidCredentialsError';
+  }
+}
+
+export class UserAlreadyExistsError extends Error {
+  constructor(email: string) {
+    super(`User with email ${email} already exists`);
+    this.name = 'UserAlreadyExistsError';
+  }
+}
+```
+
+## 🚀 Performance & Scalability
+
+### Caching Strategy
+- **User Cache**: Cache frequently accessed user data
+- **Token Cache**: Cache token validation results
+- **Invalidation**: Smart cache invalidation on user updates
+
+### Database Optimization
+- **Clerk API Optimization**: Efficient use of Clerk API endpoints
+- **Batch Operations**: Support for bulk user operations
+
+## 📊 Monitoring & Logging
+
+### Authentication Analytics
+- **Login Tracking**: Monitor login attempts and success rates
+- **User Registration**: Track new user registrations
+- **Security Events**: Log suspicious activities and failed attempts
+
+### Structured Logging
+```typescript
+// User creation logging
+logger.info('User created successfully', {
+  userId: user.id,
+  email: user.emailAddress[0],
+  role: user.role,
+  source: 'registration',
+});
+
+// Failed login logging
+logger.warn('Failed login attempt', {
+  email: loginAttempt.email,
+  ip: req.ip,
+  userAgent: req.get('User-Agent'),
+});
+```
+
+## 🔧 Development & Deployment
+
+### Environment Configuration
+```bash
+# Required environment variables
+CLERK_SECRET_KEY=sk_test_...
+CLERK_WEBHOOK_SECRET=whsec_...
+KAFKA_BROKERS=localhost:9092
+JWT_SECRET=your-secret-key
+PORT=3007
+```
+
+### Clerk Dashboard Setup
+1. **Create Clerk Application**: Set up Clerk application and get API keys
+2. **Configure Social Providers**: Set up Google, GitHub, and other social login providers
+3. **Webhook Configuration**: Configure webhooks for user events (optional)
+
+### Development Setup
+```bash
+# Install dependencies
+pnpm install
+
+# Start development server
+pnpm dev
+```
+
+### Docker Configuration
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+EXPOSE 3007
+CMD ["pnpm", "start"]
+```
+
+## 🧪 Testing
+
+### Test Structure
+- **Unit Tests**: Test individual authentication functions
+- **Integration Tests**: Test Clerk API integration
+- **Security Tests**: Test authentication and authorization
+
+### Test Examples
+```typescript
+describe('Authentication Service', () => {
+  describe('POST /api/users', () => {
+    it('should create user successfully', async () => {
+      const userData = {
+        firstName: 'John',
+        lastName: 'Doe',
+        username: 'johndoe',
+        emailAddress: ['john@example.com'],
+        password: 'securepassword123',
+      };
+
+      const response = await request(app)
+        .post('/api/users')
+        .send(userData)
+        .expect(201);
+
+      expect(response.body).toMatchObject({
+        firstName: 'John',
+        lastName: 'Doe',
+        emailAddress: ['john@example.com'],
+      });
+    });
+  });
+
+  describe('Authentication Middleware', () => {
+    it('should authenticate valid token', async () => {
+      const token = await generateValidToken();
+
+      const response = await request(app)
+        .get('/api/users')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('users');
+    });
+
+    it('should reject invalid token', async () => {
+      const response = await request(app)
+        .get('/api/users')
+        .set('Authorization', 'Bearer invalid-token')
+        .expect(403);
+
+      expect(response.body).toHaveProperty('error', 'Invalid token');
+    });
+  });
+});
+```
+
+## 🔮 Future Enhancements
+
+### Planned Features
+- **Advanced Role Management**: Granular permissions and role hierarchies
+- **Multi-factor Authentication**: Enhanced security with MFA
+- **Social Login Integration**: Expanded social provider support
+- **Password Policies**: Configurable password complexity requirements
+- **Account Recovery**: Enhanced password reset and account recovery flows
+- **User Analytics**: Detailed user behavior and engagement metrics
+
+### Security Improvements
+- **Rate Limiting**: Prevent brute force attacks
+- **Session Management**: Advanced session handling and timeout
+- **Audit Logging**: Comprehensive audit trail for security events
+- **IP Whitelisting**: Restrict access by IP address for admin functions
+
+### Integration Enhancements
+- **Webhook Processing**: Handle Clerk webhooks for real-time updates
+- **Third-party Integrations**: Integration with external user systems
+- **API Rate Limiting**: Implement rate limiting for API endpoints
+- **Advanced Caching**: Redis integration for improved performance

@@ -1,0 +1,719 @@
+---
+title: Database Packages
+description: Shared database connections, schemas, and ORM configurations
+---
+
+# Database Packages
+
+The Database Packages provide centralized database connections, schemas, and ORM configurations for PostgreSQL (`@repo/product-db`) and MongoDB (`@repo/order-db`) used across the e-commerce platform. These packages ensure consistent database access patterns and type safety.
+
+## 🛠️ Technology Stack
+
+- **PostgreSQL**: Primary database for structured data (Prisma ORM)
+- **MongoDB**: Secondary database for flexible schemas (Mongoose ODM)
+- **Prisma**: Type-safe database toolkit for PostgreSQL
+- **Mongoose**: MongoDB object modeling for Node.js
+- **TypeScript**: Full type safety for database operations
+
+## 📁 Package Structure
+
+### Product Database Package
+```
+packages/product-db/
+├── prisma/
+│   ├── schema.prisma    # Database schema definition
+│   ├── migrations/      # Database migrations
+│   └── seed.js         # Database seeding script
+├── src/
+│   ├── client.ts        # Prisma client configuration
+│   └── index.ts         # Main exports
+└── package.json
+```
+
+### Order Database Package
+```
+packages/order-db/
+├── src/
+│   ├── connection.ts    # MongoDB connection configuration
+│   ├── order-model.ts   # Mongoose order schema
+│   └── index.ts         # Main exports
+└── package.json
+```
+
+## 🏗️ PostgreSQL Database (Product DB)
+
+### Prisma Schema
+
+#### Database Configuration
+```prisma
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+```
+
+#### Product Model
+```prisma
+model Product {
+  id               Int      @id @default(autoincrement())
+  name             String
+  shortDescription String
+  description      String
+  price            Int      // Price in cents for precision
+  sizes            String[] // Array of available sizes
+  colors           String[] // Array of available colors
+  images           Json     // Object mapping colors to image URLs
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  categorySlug     String
+  category         Category @relation(fields: [categorySlug], references: [slug])
+
+  @@map("products")
+}
+```
+
+#### Category Model
+```prisma
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  slug     String    @unique
+  products Product[]
+
+  @@map("categories")
+}
+```
+
+### Prisma Client Configuration
+
+#### Client Setup
+```typescript
+// packages/product-db/src/client.ts
+import { PrismaClient } from './generated/prisma';
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: ['query', 'error', 'warn'],
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL,
+      },
+    },
+  });
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}
+```
+
+#### Client Features
+- **Connection Management**: Automatic connection handling and pooling
+- **Query Logging**: Detailed query logging in development
+- **Type Safety**: Full TypeScript support with generated types
+- **Global Instance**: Singleton pattern for efficient resource usage
+
+### Database Operations
+
+#### Product Operations
+```typescript
+import { prisma } from '@repo/product-db';
+
+// Create product
+export const createProduct = async (productData: {
+  name: string;
+  shortDescription: string;
+  description: string;
+  price: number;
+  categorySlug: string;
+  sizes: string[];
+  colors: string[];
+  images: Record<string, string>;
+}) => {
+  return await prisma.product.create({
+    data: productData,
+    include: {
+      category: true,
+    },
+  });
+};
+
+// Get products with filtering
+export const getProducts = async (filters: {
+  category?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sizes?: string[];
+  colors?: string[];
+  search?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}) => {
+  const {
+    category,
+    minPrice,
+    maxPrice,
+    sizes,
+    colors,
+    search,
+    page = 1,
+    limit = 20,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+  } = filters;
+
+  const skip = (page - 1) * limit;
+
+  const where: any = {};
+
+  if (category) where.categorySlug = category;
+  if (minPrice || maxPrice) {
+    where.price = {};
+    if (minPrice) where.price.gte = minPrice;
+    if (maxPrice) where.price.lte = maxPrice;
+  }
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { description: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  return await prisma.product.findMany({
+    where,
+    include: {
+      category: true,
+    },
+    orderBy: {
+      [sortBy]: sortOrder,
+    },
+    skip,
+    take: limit,
+  });
+};
+```
+
+#### Category Operations
+```typescript
+// Get all categories with product counts
+export const getCategories = async () => {
+  return await prisma.category.findMany({
+    include: {
+      _count: {
+        select: {
+          products: true,
+        },
+      },
+    },
+  });
+};
+
+// Create category
+export const createCategory = async (data: {
+  name: string;
+  slug: string;
+}) => {
+  return await prisma.category.create({
+    data,
+  });
+};
+```
+
+## 🏗️ MongoDB Database (Order DB)
+
+### Mongoose Configuration
+
+#### Connection Setup
+```typescript
+// packages/order-db/src/connection.ts
+import mongoose from 'mongoose';
+
+export const connectMongoDB = async () => {
+  try {
+    const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ecom_orders';
+
+    await mongoose.connect(mongoUri, {
+      maxPoolSize: 10, // Maximum number of connections in the connection pool
+      serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
+      socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+      bufferCommands: false, // Disable mongoose buffering
+      bufferMaxEntries: 0, // Disable mongoose buffering
+    });
+
+    console.log('MongoDB connected successfully');
+
+    // Connection event listeners
+    mongoose.connection.on('error', (error) => {
+      console.error('MongoDB connection error:', error);
+    });
+
+    mongoose.connection.on('disconnected', () => {
+      console.log('MongoDB disconnected');
+    });
+
+    return mongoose.connection;
+  } catch (error) {
+    console.error('Failed to connect to MongoDB:', error);
+    throw error;
+  }
+};
+
+export const disconnectMongoDB = async () => {
+  try {
+    await mongoose.connection.close();
+    console.log('MongoDB disconnected successfully');
+  } catch (error) {
+    console.error('Failed to disconnect from MongoDB:', error);
+  }
+};
+```
+
+### Order Schema
+
+#### Order Model Definition
+```typescript
+// packages/order-db/src/order-model.ts
+import mongoose, { InferSchemaType, model } from "mongoose";
+const { Schema } = mongoose;
+
+export const OrderStatus = ["success", "failed"] as const;
+
+const OrderSchema = new Schema(
+  {
+    userId: { type: String, required: true },
+    email: { type: String, required: true },
+    amount: { type: Number, required: true },
+    status: {
+      type: String,
+      required: true,
+      enum: OrderStatus
+    },
+    products: {
+      type: [
+        {
+          name: { type: String, required: true },
+          quantity: { type: Number, required: true },
+          price: { type: Number, required: true },
+        },
+      ],
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+    collection: 'orders'
+  }
+);
+
+// Add indexes for better query performance
+OrderSchema.index({ userId: 1, createdAt: -1 });
+OrderSchema.index({ status: 1, createdAt: -1 });
+OrderSchema.index({ email: 1 });
+
+export type OrderSchemaType = InferSchemaType<typeof OrderSchema>;
+
+export const Order = model<OrderSchemaType>("Order", OrderSchema);
+```
+
+#### Order Model Features
+- **Type Safety**: Full TypeScript support with inferred types
+- **Validation**: Built-in schema validation
+- **Indexes**: Optimized indexes for common query patterns
+- **Timestamps**: Automatic createdAt and updatedAt fields
+
+### Database Operations
+
+#### Order Operations
+```typescript
+import { Order, OrderSchemaType } from '@repo/order-db';
+
+// Create order
+export const createOrder = async (orderData: {
+  userId: string;
+  email: string;
+  amount: number;
+  status: 'success' | 'failed';
+  products: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+  }>;
+}) => {
+  const order = new Order(orderData);
+  return await order.save();
+};
+
+// Get user orders with pagination
+export const getUserOrders = async (
+  userId: string,
+  options: {
+    page?: number;
+    limit?: number;
+    status?: 'success' | 'failed';
+  } = {}
+) => {
+  const { page = 1, limit = 10, status } = options;
+  const skip = (page - 1) * limit;
+
+  const query: any = { userId };
+  if (status) query.status = status;
+
+  const [orders, totalCount] = await Promise.all([
+    Order.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Order.countDocuments(query),
+  ]);
+
+  return {
+    orders,
+    totalCount,
+    currentPage: page,
+    totalPages: Math.ceil(totalCount / limit),
+    hasNextPage: page * limit < totalCount,
+    hasPrevPage: page > 1,
+  };
+};
+
+// Get order analytics
+export const getOrderAnalytics = async (period: {
+  startDate: Date;
+  endDate: Date;
+}) => {
+  const { startDate, endDate } = period;
+
+  const analytics = await Order.aggregate([
+    {
+      $match: {
+        createdAt: { $gte: startDate, $lte: endDate },
+        status: 'success',
+      },
+    },
+    {
+      $group: {
+        _id: {
+          year: { $year: '$createdAt' },
+          month: { $month: '$createdAt' },
+        },
+        totalOrders: { $sum: 1 },
+        totalRevenue: { $sum: '$amount' },
+        averageOrderValue: { $avg: '$amount' },
+      },
+    },
+    {
+      $sort: { '_id.year': 1, '_id.month': 1 },
+    },
+  ]);
+
+  return analytics.map((item) => ({
+    month: `${item._id.year}-${item._id.month.toString().padStart(2, '0')}`,
+    total: item.totalOrders,
+    revenue: item.totalRevenue,
+    averageOrderValue: item.averageOrderValue,
+  }));
+};
+```
+
+## 🔄 Usage Across Services
+
+### Product Service Usage
+```typescript
+// In Product Service
+import { prisma } from '@repo/product-db';
+import { createProduct, getProducts } from '@repo/product-db';
+
+export class ProductService {
+  async getProductList(filters: ProductFilters) {
+    return await getProducts(filters);
+  }
+
+  async createNewProduct(productData: CreateProductData) {
+    return await createProduct(productData);
+  }
+}
+```
+
+### Order Service Usage
+```typescript
+// In Order Service
+import { Order, createOrder, getUserOrders } from '@repo/order-db';
+import { connectMongoDB, disconnectMongoDB } from '@repo/order-db';
+
+export class OrderService {
+  async initialize() {
+    await connectMongoDB();
+  }
+
+  async createOrderFromPayment(paymentData: PaymentData) {
+    return await createOrder({
+      userId: paymentData.userId,
+      email: paymentData.email,
+      amount: paymentData.amount,
+      status: 'success',
+      products: paymentData.products,
+    });
+  }
+
+  async getUserOrderHistory(userId: string, page: number = 1) {
+    return await getUserOrders(userId, { page, limit: 10 });
+  }
+}
+```
+
+## 🛡️ Error Handling & Validation
+
+### Prisma Error Handling
+```typescript
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+
+export const handlePrismaError = (error: any) => {
+  if (error instanceof PrismaClientKnownRequestError) {
+    switch (error.code) {
+      case 'P2002':
+        throw new Error('Unique constraint violation');
+      case 'P2025':
+        throw new Error('Record not found');
+      case 'P2003':
+        throw new Error('Foreign key constraint failed');
+      default:
+        throw new Error(`Database error: ${error.message}`);
+    }
+  }
+  throw error;
+};
+```
+
+### Mongoose Error Handling
+```typescript
+import { Error as MongooseError } from 'mongoose';
+
+export const handleMongooseError = (error: any) => {
+  if (error instanceof MongooseError.ValidationError) {
+    const messages = Object.values(error.errors).map(err => err.message);
+    throw new Error(`Validation failed: ${messages.join(', ')}`);
+  }
+
+  if (error.name === 'MongoError' || error.name === 'MongoServerError') {
+    if (error.code === 11000) {
+      throw new Error('Duplicate key error');
+    }
+  }
+
+  throw error;
+};
+```
+
+## 🚀 Performance & Scalability
+
+### PostgreSQL Optimization
+- **Connection Pooling**: Efficient connection reuse with Prisma
+- **Query Optimization**: Proper indexing and query structure
+- **Migration Management**: Safe database schema evolution
+
+### MongoDB Optimization
+- **Connection Pooling**: Configurable connection pool settings
+- **Index Strategy**: Optimized indexes for query patterns
+- **Aggregation Performance**: Efficient aggregation pipelines
+
+### Database Indexes
+
+#### PostgreSQL Indexes
+```sql
+-- Product search indexes
+CREATE INDEX idx_products_name_search ON products USING gin(to_tsvector('english', name));
+CREATE INDEX idx_products_category_slug ON products(category_slug);
+CREATE INDEX idx_products_price ON products(price);
+
+-- Category indexes
+CREATE UNIQUE INDEX idx_categories_slug ON categories(slug);
+```
+
+#### MongoDB Indexes
+```typescript
+// Order collection indexes
+Order.collection.createIndex({ userId: 1, createdAt: -1 });
+Order.collection.createIndex({ status: 1, createdAt: -1 });
+Order.collection.createIndex({ email: 1 });
+```
+
+## 📊 Monitoring & Health Checks
+
+### Database Health Checks
+```typescript
+// PostgreSQL health check
+export const checkPostgresHealth = async () => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return { status: 'healthy', database: 'postgresql' };
+  } catch (error) {
+    return { status: 'unhealthy', database: 'postgresql', error: error.message };
+  }
+};
+
+// MongoDB health check
+export const checkMongoDBHealth = async () => {
+  try {
+    await mongoose.connection.db.admin().ping();
+    return { status: 'healthy', database: 'mongodb' };
+  } catch (error) {
+    return { status: 'unhealthy', database: 'mongodb', error: error.message };
+  }
+};
+```
+
+### Performance Monitoring
+```typescript
+// Query performance monitoring
+export const monitorQueryPerformance = () => {
+  // Log slow queries
+  prisma.$on('query', (e) => {
+    if (e.duration > 1000) { // Log queries slower than 1 second
+      console.warn('Slow query detected:', {
+        query: e.query,
+        duration: e.duration,
+        timestamp: e.timestamp,
+      });
+    }
+  });
+};
+```
+
+## 🔧 Development & Deployment
+
+### Environment Configuration
+```bash
+# PostgreSQL Configuration
+DATABASE_URL=postgresql://user:password@localhost:5432/ecom_products
+
+# MongoDB Configuration
+MONGODB_URI=mongodb://localhost:27017/ecom_orders
+
+# Prisma Configuration
+PRISMA_GENERATE_DATAPROXY=false
+PRISMA_GENERATE_SKIP_DOWNLOAD=true
+```
+
+### Database Setup Scripts
+
+#### PostgreSQL Setup
+```bash
+# Generate Prisma client
+pnpm db:generate
+
+# Run database migrations
+pnpm db:migrate
+
+# Deploy migrations to database
+pnpm db:deploy
+
+# Seed database (if needed)
+pnpm db:seed
+```
+
+#### MongoDB Setup
+```bash
+# Start MongoDB (via Docker)
+docker run -d -p 27017:27017 mongo:latest
+
+# Or use MongoDB Atlas connection string
+MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/ecom_orders
+```
+
+### Docker Configuration
+
+#### PostgreSQL Docker
+```dockerfile
+FROM postgres:15-alpine
+COPY init.sql /docker-entrypoint-initdb.d/
+EXPOSE 5432
+```
+
+#### MongoDB Docker
+```dockerfile
+FROM mongo:7.0
+EXPOSE 27017
+```
+
+## 🧪 Testing
+
+### Database Testing Strategy
+- **Test Database**: Separate test database for each test run
+- **Database Transactions**: Rollback changes after each test
+- **Mock Data**: Seed test data for consistent testing
+
+### Test Examples
+```typescript
+describe('Product Database', () => {
+  beforeAll(async () => {
+    // Set up test database
+    await setupTestDatabase();
+  });
+
+  afterAll(async () => {
+    // Clean up test database
+    await cleanupTestDatabase();
+  });
+
+  beforeEach(async () => {
+    // Start transaction for each test
+    await startTransaction();
+  });
+
+  afterEach(async () => {
+    // Rollback transaction after each test
+    await rollbackTransaction();
+  });
+
+  it('should create product successfully', async () => {
+    const productData = {
+      name: 'Test Product',
+      shortDescription: 'A test product',
+      description: 'Detailed description',
+      price: 2999, // Price in cents
+      categorySlug: 'test-category',
+      sizes: ['M', 'L'],
+      colors: ['red', 'blue'],
+      images: { red: 'red.jpg', blue: 'blue.jpg' },
+    };
+
+    const product = await createProduct(productData);
+
+    expect(product).toMatchObject(productData);
+    expect(product.id).toBeDefined();
+    expect(product.createdAt).toBeDefined();
+  });
+});
+```
+
+## 🔮 Future Enhancements
+
+### Planned Features
+- **Database Migration Tools**: Advanced migration management
+- **Query Builder**: Custom query builder for complex operations
+- **Connection Monitoring**: Real-time connection pool monitoring
+- **Backup Strategies**: Automated backup and recovery
+- **Multi-tenancy**: Support for multiple tenants
+
+### Performance Improvements
+- **Read Replicas**: PostgreSQL read scaling
+- **Connection Pool Optimization**: Advanced connection pool tuning
+- **Query Result Caching**: Cache frequently accessed data
+- **Database Sharding**: Horizontal scaling strategies
+
+### Monitoring Enhancements
+- **Query Analytics**: Detailed query performance analysis
+- **Connection Pool Metrics**: Monitor connection pool usage
+- **Slow Query Detection**: Automatic slow query identification
+- **Database Alerts**: Proactive monitoring and alerting

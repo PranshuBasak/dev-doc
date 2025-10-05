@@ -1,0 +1,45 @@
+
+> dev-doc@0.0.0 build C:\Others\proj\microservices-ecommerce\apps\dev-doc
+> next build
+
+   ▲ Next.js 15.5.4
+
+[MDX] updated map file in 214.80999999999995ms
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 16.0s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/34) ...
+ ⚠ metadataBase property in metadata export is not set for resolving social open graph or twitter images, using "http://localhost:3000". See https://nextjs.org/docs/app/api-reference/functions/generate-metadata#metadatabase
+   Generating static pages (8/34) 
+   Generating static pages (16/34) 
+   Generating static pages (25/34) 
+ ✓ Generating static pages (34/34)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                             Size  First Load JS
+┌ ○ /                                                  164 B         106 kB
+├ ○ /_not-found                                        996 B         104 kB
+├ ƒ /api/search                                        135 B         103 kB
+├ ● /docs/[[...slug]]                                13.7 kB         132 kB
+├   ├ /docs
+├   ├ /docs/1-architecture/overview
+├   ├ /docs/2-applications/admin-panel
+├   └ [+11 more paths]
+├ ○ /llms-full.txt                                     135 B         103 kB
+└ ● /og/docs/[...slug]                                 135 B         103 kB
+    ├ /og/docs/image.png
+    ├ /og/docs/1-architecture/overview/image.png
+    ├ /og/docs/2-applications/admin-panel/image.png
+    └ [+11 more paths]
++ First Load JS shared by all                         103 kB
+  ├ chunks/720-3961f81a4276ef98.js                   45.7 kB
+  ├ chunks/f57ef4fc-83773997634ccefe.js              54.2 kB
+  └ other shared chunks (total)                      2.79 kB
+
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand
+

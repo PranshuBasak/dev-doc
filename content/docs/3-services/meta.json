@@ -1,0 +1,11 @@
+{
+  "title": "🔧 Backend Services",
+  "description": "Detailed documentation of all backend microservices",
+  "pages": [
+    "product-service",
+    "order-service",
+    "payment-service",
+    "auth-service",
+    "email-service"
+  ]
+}

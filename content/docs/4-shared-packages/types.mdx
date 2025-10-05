@@ -1,0 +1,494 @@
+---
+title: Types Package
+description: Shared TypeScript type definitions and Zod schemas
+---
+
+# Types Package
+
+The Types Package (`@repo/types`) provides centralized TypeScript type definitions and Zod validation schemas used across all applications and services in the e-commerce platform. This ensures type safety and consistency throughout the entire codebase.
+
+## 🛠️ Technology Stack
+
+- **TypeScript**: Type definitions and interfaces
+- **Zod**: Runtime type validation schemas
+- **Package Structure**: Shared workspace package in Turborepo
+
+## 📁 Package Structure
+
+```
+packages/types/
+├── src/
+│   ├── auth.ts          # Authentication-related types
+│   ├── product.ts       # Product and category types
+│   ├── cart.ts          # Shopping cart types
+│   ├── order.ts         # Order management types
+│   └── index.ts         # Main exports
+└── package.json
+```
+
+## 🔧 Type Definitions
+
+### Authentication Types
+
+#### User Interface
+```typescript
+export interface CustomJwtSessionClaims {
+  metadata?: {
+    role?: "user" | "admin";
+  };
+}
+```
+
+#### User Form Schema
+```typescript
+export const UserFormSchema = z.object({
+  firstName: z
+    .string({ message: "First name is required!" })
+    .min(2, { message: "First name must be at least 2 characters!" })
+    .max(50),
+  lastName: z
+    .string({ message: "Last name is required!" })
+    .min(2, { message: "Last name must be at least 2 characters!" })
+    .max(50),
+  username: z
+    .string({ message: "Username is required!" })
+    .min(2, { message: "Username must be at least 2 characters!" })
+    .max(50),
+  emailAddress: z.array(z.string({ message: "Email address is required!" })),
+  password: z
+    .string({ message: "Password is required!" })
+    .min(8, { message: "Password must be at least 8 characters!" })
+    .max(50),
+});
+```
+
+### Product Types
+
+#### Product Interface
+```typescript
+export type ProductType = Product; // From @repo/product-db
+
+export type ProductsType = ProductType[];
+
+export type StripeProductType = {
+  id: string;
+  name: string;
+  price: number;
+};
+```
+
+#### Size and Color Constants
+```typescript
+export const colors = [
+  "blue",
+  "green",
+  "red",
+  "yellow",
+  "purple",
+  "orange",
+  "pink",
+  "brown",
+  "gray",
+  "black",
+  "white",
+] as const;
+
+export const sizes = [
+  "xs",
+  "s",
+  "m",
+  "l",
+  "xl",
+  "xxl",
+  "34",
+  "35",
+  "36",
+  "37",
+  "38",
+  "39",
+  "40",
+  "41",
+  "42",
+  "43",
+  "44",
+  "45",
+  "46",
+  "47",
+  "48",
+] as const;
+```
+
+#### Product Form Schema
+```typescript
+export const ProductFormSchema = z
+  .object({
+    name: z
+      .string({ message: "Product name is required!" })
+      .min(1, { message: "Product name is required!" }),
+    shortDescription: z
+      .string({ message: "Short description is required!" })
+      .min(1, { message: "Short description is required!" })
+      .max(60),
+    description: z
+      .string({ message: "Description is required!" })
+      .min(1, { message: "Description is required!" }),
+    price: z
+      .number({ message: "Price is required!" })
+      .min(1, { message: "Price is required!" }),
+    categorySlug: z
+      .string({ message: "Category is required!" })
+      .min(1, { message: "Category is required!" }),
+    sizes: z
+      .array(z.enum(sizes))
+      .min(1, { message: "At least one size is required!" }),
+    colors: z
+      .array(z.enum(colors))
+      .min(1, { message: "At least one color is required!" }),
+    images: z.record(z.string(), z.string(), {
+      message: "Image for each color is required!",
+    }),
+  })
+  .refine(
+    (data) => {
+      const missingImages = data.colors.filter(
+        (color: string) => !data.images?.[color]
+      );
+      return missingImages.length === 0;
+    },
+    {
+      message: "Image is required for each selected color!",
+      path: ["images"],
+    }
+  );
+```
+
+#### Category Types
+```typescript
+export type CategoryType = Category; // From @repo/product-db
+
+export const CategoryFormSchema = z.object({
+  name: z
+    .string({ message: "Name is Required!" })
+    .min(1, { message: "Name is Required!" }),
+  slug: z
+    .string({ message: "Slug is Required!" })
+    .min(1, { message: "Slug is Required!" }),
+});
+```
+
+### Cart Types
+
+#### Cart Item Interface
+```typescript
+export type CartItemType = Product & {
+  quantity: number;
+  selectedSize: string;
+  selectedColor: string;
+};
+
+export type CartItemsType = CartItemType[];
+```
+
+#### Shipping Form Schema
+```typescript
+export const shippingFormSchema = z.object({
+  name: z.string().min(1, "Name is required!"),
+  email: z
+    .string()
+    .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Invalid email format")
+    .min(1, "Email is required!"),
+  phone: z
+    .string()
+    .min(7, "Phone number must be between 7 and 10 digits!")
+    .max(10, "Phone number must be between 7 and 10 digits!")
+    .regex(/^\d+$/, "Phone number must contain only numbers!"),
+  address: z.string().min(1, "Address is required!"),
+  city: z.string().min(1, "City is required!"),
+});
+
+export type ShippingFormInputs = z.infer<typeof shippingFormSchema>;
+```
+
+#### Cart State Management
+```typescript
+export type CartStoreStateType = {
+  cart: CartItemsType;
+  hasHydrated: boolean;
+};
+
+export type CartStoreActionsType = {
+  addToCart: (product: CartItemType) => void;
+  removeFromCart: (product: CartItemType) => void;
+  clearCart: () => void;
+};
+```
+
+### Order Types
+
+#### Order Interface
+```typescript
+export type OrderType = OrderSchemaType & {
+  _id: string;
+};
+
+export type OrderChartType = {
+  month: string;
+  total: number;
+  successful: number;
+};
+```
+
+## 🔄 Usage Across Services
+
+### Client Application Usage
+```typescript
+// Import types for type safety
+import type { ProductType, CartItemType } from '@repo/types';
+import { ProductFormSchema, shippingFormSchema } from '@repo/types';
+
+// Use in React components
+const ProductCard: React.FC<{ product: ProductType }> = ({ product }) => {
+  // Type-safe product handling
+};
+
+// Form validation with Zod schemas
+const CheckoutForm = () => {
+  const form = useForm<ShippingFormInputs>({
+    resolver: zodResolver(shippingFormSchema),
+  });
+};
+```
+
+### Admin Panel Usage
+```typescript
+// Import types for admin components
+import type { ProductType, CategoryType } from '@repo/types';
+import { ProductFormSchema, CategoryFormSchema } from '@repo/types';
+
+// Type-safe admin operations
+const ProductManagement: React.FC = () => {
+  const [products, setProducts] = useState<ProductType[]>([]);
+
+  // Fully typed product management
+};
+```
+
+### Backend Services Usage
+```typescript
+// Import types in service layer
+import type { ProductType, CreateProductData } from '@repo/types';
+import { ProductFormSchema } from '@repo/types';
+
+// Runtime validation in API routes
+export const createProduct = async (req: Request, res: Response) => {
+  try {
+    const validatedData = ProductFormSchema.parse(req.body);
+
+    // validatedData is now fully typed
+    const product = await Product.create(validatedData);
+    res.status(201).json(product);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ errors: error.errors });
+    }
+  }
+};
+```
+
+## 🛡️ Validation Benefits
+
+### Runtime Type Safety
+- **Input Validation**: All API inputs validated with Zod schemas
+- **Error Messages**: User-friendly error messages for validation failures
+- **Type Inference**: Automatic TypeScript types from Zod schemas
+
+### Consistency Across Services
+- **Unified Schemas**: Same validation logic across all applications
+- **Shared Error Messages**: Consistent error messaging
+- **Type Synchronization**: Types and schemas stay in sync
+
+## 🔧 Development Workflow
+
+### Adding New Types
+
+1. **Define Interface/Type**: Add TypeScript interface in appropriate file
+2. **Create Zod Schema**: Define validation schema with proper error messages
+3. **Export from Index**: Update index.ts to export new types
+4. **Use in Applications**: Import and use in client/admin applications
+
+### Example: Adding User Preferences
+```typescript
+// In auth.ts
+export interface UserPreferences {
+  theme: 'light' | 'dark';
+  notifications: boolean;
+  language: string;
+}
+
+export const UserPreferencesSchema = z.object({
+  theme: z.enum(['light', 'dark']),
+  notifications: z.boolean(),
+  language: z.string().min(1),
+});
+
+// In index.ts
+export * from "./auth";
+```
+
+## 🚀 Performance Considerations
+
+### Bundle Size Optimization
+- **Tree Shaking**: Only import used types and schemas
+- **Selective Imports**: Import specific types rather than entire modules
+- **Schema Optimization**: Minimize schema complexity for better performance
+
+### Runtime Performance
+- **Schema Caching**: Zod schemas cached for repeated validations
+- **Lazy Validation**: Validate only when necessary
+- **Error Optimization**: Efficient error message generation
+
+## 🧪 Testing
+
+### Type Testing
+```typescript
+import { ProductFormSchema } from '@repo/types';
+
+describe('ProductFormSchema', () => {
+  it('should validate correct product data', () => {
+    const validData = {
+      name: 'Test Product',
+      shortDescription: 'A test product',
+      description: 'Detailed description',
+      price: 29.99,
+      categorySlug: 'test-category',
+      sizes: ['M', 'L'],
+      colors: ['red', 'blue'],
+      images: { red: 'red.jpg', blue: 'blue.jpg' },
+    };
+
+    expect(() => ProductFormSchema.parse(validData)).not.toThrow();
+  });
+
+  it('should reject invalid data', () => {
+    const invalidData = {
+      name: '', // Empty name should fail
+      price: -10, // Negative price should fail
+    };
+
+    expect(() => ProductFormSchema.parse(invalidData)).toThrow();
+  });
+});
+```
+
+## 🔮 Future Enhancements
+
+### Planned Additions
+- **API Response Types**: Standardized API response interfaces
+- **Error Types**: Structured error type definitions
+- **Database Types**: Enhanced database model types
+- **Event Types**: Kafka event type definitions
+- **Configuration Types**: Application configuration interfaces
+
+### Advanced Features
+- **Conditional Types**: Dynamic types based on conditions
+- **Generic Types**: Reusable generic type definitions
+- **Branded Types**: Type-safe branded type definitions
+- **Schema Composition**: Advanced schema composition patterns
+
+## 💡 Usage Examples
+
+### Type-safe Product Creation
+```typescript
+import type { ProductType, CartItemType } from '@repo/types';
+import { ProductFormSchema } from '@repo/types';
+
+// Type-safe product data
+const productData: ProductType = {
+  id: 1,
+  name: "Premium T-Shirt",
+  shortDescription: "Comfortable cotton t-shirt",
+  description: "High-quality cotton t-shirt available in multiple colors and sizes",
+  price: 2999, // Price in cents
+  sizes: ["S", "M", "L", "XL"],
+  colors: ["red", "blue", "black"],
+  images: {
+    red: "/products/tshirt-red.jpg",
+    blue: "/products/tshirt-blue.jpg",
+    black: "/products/tshirt-black.jpg"
+  },
+  categorySlug: "clothing",
+  createdAt: new Date(),
+  updatedAt: new Date()
+};
+
+// Type-safe cart item
+const cartItem: CartItemType = {
+  ...productData,
+  quantity: 2,
+  selectedSize: "M",
+  selectedColor: "blue"
+};
+
+// Runtime validation with Zod
+try {
+  const validatedData = ProductFormSchema.parse({
+    name: "New Product",
+    shortDescription: "A great product",
+    description: "This product is amazing",
+    price: 49.99,
+    categorySlug: "electronics",
+    sizes: ["M"],
+    colors: ["black"],
+    images: { black: "image.jpg" }
+  });
+
+  // validatedData is now fully typed
+  console.log("Product is valid:", validatedData.name);
+} catch (error) {
+  // Handle validation errors
+  console.error("Validation failed:", error.errors);
+}
+```
+
+### Advanced Type Composition
+```typescript
+// Advanced type composition example
+import { z } from 'zod';
+
+// Base product schema
+const BaseProductSchema = z.object({
+  name: z.string().min(1),
+  price: z.number().min(0.01),
+});
+
+// Extended schema with conditional logic
+const ProductWithVariantsSchema = BaseProductSchema.extend({
+  hasVariants: z.boolean(),
+  variants: z.array(z.object({
+    size: z.string(),
+    color: z.string(),
+    stock: z.number().min(0)
+  })).optional()
+}).refine(
+  (data) => {
+    // Custom validation logic
+    if (data.hasVariants && (!data.variants || data.variants.length === 0)) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: "Variants are required when hasVariants is true",
+    path: ["variants"]
+  }
+);
+
+// Type inference from schema
+type ProductWithVariants = z.infer<typeof ProductWithVariantsSchema>;
+
+// Usage with full type safety
+const createProductWithVariants = (data: ProductWithVariants) => {
+  const validated = ProductWithVariantsSchema.parse(data);
+  return validated; // Fully typed result
+};
+```

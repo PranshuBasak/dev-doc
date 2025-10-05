@@ -1,0 +1,449 @@
+---
+title: Payment Service
+description: Handles Stripe payment processing, webhooks, and checkout sessions
+---
+
+# Payment Service
+
+The Payment Service manages all payment-related operations for the e-commerce platform, integrating with Stripe for secure payment processing. Built with Hono and TypeScript, it handles checkout session creation, webhook processing, and payment verification.
+
+## 🛠️ Technology Stack
+
+- **Runtime**: Node.js 18+
+- **Framework**: Hono with TypeScript
+- **Payment Provider**: Stripe API and webhooks
+- **Validation**: Zod for runtime type checking
+- **Events**: Kafka producer for payment events
+- **Security**: Stripe webhook signature verification
+- **Error Handling**: Custom error classes and global error handler
+- **Logging**: Winston for structured logging
+
+## 🏗️ Architecture
+
+### Service Structure
+```
+apps/payment-service/
+├── src/
+│   ├── controllers/     # Request handlers
+│   ├── middleware/      # Custom middleware
+│   ├── routes/          # Route definitions
+│   ├── services/        # Business logic services
+│   ├── utils/           # Utility functions
+│   ├── webhooks/        # Stripe webhook handlers
+│   ├── consumers/       # Kafka event consumers
+│   ├── index.ts         # Application entry point
+│   └── types/           # Local type definitions
+├── package.json
+```
+
+### Key Components
+- **Checkout Controller**: Handles checkout session creation
+- **Webhook Handler**: Processes Stripe webhook events
+- **Product Verification**: Validates product prices from Stripe
+- **Event Publisher**: Publishes payment events to Kafka
+
+## 🔧 Core Functionality
+
+### Checkout Session Management
+
+#### Create Checkout Session
+Creates a Stripe checkout session for customer payment.
+
+**Endpoint**: `POST /api/payments/create-checkout-session`
+
+**Request Body**:
+```typescript
+{
+  products: Array<{
+    name: string;
+    price: number;
+    quantity: number;
+    image?: string;
+  }>;
+  successUrl: string;
+  cancelUrl: string;
+  customerEmail?: string;
+  metadata?: Record<string, string>;
+}
+```
+
+**Response**:
+```typescript
+{
+  sessionId: string;
+  url: string; // Stripe checkout URL
+  clientSecret?: string;
+}
+```
+
+#### Checkout Session Example
+```typescript
+// Create checkout session from cart data
+const checkoutData = {
+  products: [
+    {
+      name: 'Premium T-Shirt',
+      price: 29.99,
+      quantity: 2,
+      image: 'https://example.com/tshirt.jpg',
+    },
+    {
+      name: 'Designer Jeans',
+      price: 89.99,
+      quantity: 1,
+      image: 'https://example.com/jeans.jpg',
+    },
+  ],
+  successUrl: 'https://yourstore.com/success?session_id={CHECKOUT_SESSION_ID}',
+  cancelUrl: 'https://yourstore.com/cart',
+  customerEmail: 'customer@example.com',
+};
+
+const response = await fetch('/api/payments/create-checkout-session', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(checkoutData),
+});
+```
+
+### Webhook Processing
+
+#### Stripe Webhook Handler
+Processes incoming Stripe webhook events securely.
+
+**Endpoint**: `POST /api/payments/webhooks/stripe`
+
+**Security Features**:
+- **Signature Verification**: Validates Stripe webhook signatures
+- **Event Deduplication**: Prevents processing duplicate events
+- **Error Handling**: Graceful handling of webhook processing failures
+
+#### Supported Webhook Events
+- `checkout.session.completed` - Payment successful
+- `checkout.session.expired` - Checkout session expired
+- `payment_intent.succeeded` - Payment intent succeeded
+- `payment_intent.payment_failed` - Payment failed
+- `invoice.payment_succeeded` - Invoice payment succeeded
+
+#### Webhook Processing Logic
+```typescript
+// Webhook event handler
+app.post('/webhooks/stripe', async (c) => {
+  const body = await c.req.text();
+  const signature = c.req.header('stripe-signature');
+
+  try {
+    // Verify webhook signature
+    const event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+
+    // Process event based on type
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await handleCheckoutCompleted(event.data.object);
+        break;
+      case 'payment_intent.payment_failed':
+        await handlePaymentFailed(event.data.object);
+        break;
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    return c.json({ received: true });
+  } catch (error) {
+    console.error('Webhook signature verification failed:', error);
+    return c.json({ error: 'Invalid signature' }, 400);
+  }
+});
+```
+
+### Product Price Verification
+
+#### Verify Product Prices
+Validates product prices against Stripe's price list for security.
+
+**Endpoint**: `POST /api/payments/verify-prices`
+
+**Request Body**:
+```typescript
+{
+  products: Array<{
+    productId: string;
+    price: number;
+    quantity: number;
+  }>;
+}
+```
+
+**Response**:
+```typescript
+{
+  verified: boolean;
+  discrepancies?: Array<{
+    productId: string;
+    expectedPrice: number;
+    providedPrice: number;
+  }>;
+}
+```
+
+## 🔄 Event Publishing
+
+The Payment Service publishes payment events to Kafka:
+
+### Payment Events
+
+#### payment.successful
+Published when a payment is successfully processed.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'payment.successful';
+  timestamp: string;
+  data: {
+    userId: string;
+    email: string;
+    amount: number;
+    currency: string;
+    products: Array<{
+      name: string;
+      quantity: number;
+      price: number;
+    }>;
+    paymentIntentId: string;
+    sessionId: string;
+  };
+}
+```
+
+#### payment.failed
+Published when a payment fails.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'payment.failed';
+  timestamp: string;
+  data: {
+    userId: string;
+    email: string;
+    amount: number;
+    reason: string;
+    paymentIntentId?: string;
+  };
+}
+```
+
+## 🛡️ Security Features
+
+### Stripe Integration Security
+- **Webhook Signature Verification**: Ensures webhook authenticity
+- **API Key Management**: Secure storage of Stripe API keys
+- **PCI Compliance**: No card data storage in the service
+
+### Input Validation
+```typescript
+import { z } from 'zod';
+
+export const CreateCheckoutSessionSchema = z.object({
+  products: z.array(z.object({
+    name: z.string().min(1),
+    price: z.number().min(0.01),
+    quantity: z.number().min(1),
+    image: z.string().url().optional(),
+  })).min(1),
+  successUrl: z.string().url(),
+  cancelUrl: z.string().url(),
+  customerEmail: z.string().email().optional(),
+  metadata: z.record(z.string()).optional(),
+});
+```
+
+### Error Handling
+```typescript
+// Custom error classes
+export class StripeError extends Error {
+  constructor(message: string, public code?: string) {
+    super(message);
+    this.name = 'StripeError';
+  }
+}
+
+export class PriceVerificationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PriceVerificationError';
+  }
+}
+```
+
+## 🚀 Performance & Scalability
+
+### Webhook Processing
+- **Asynchronous Processing**: Non-blocking webhook event handling
+- **Retry Logic**: Automatic retry for failed webhook processing
+- **Event Deduplication**: Prevent duplicate event processing
+
+### Caching Strategy
+- **Price Cache**: Cache Stripe price data for verification
+- **Session Cache**: Cache checkout session data temporarily
+
+## 📊 Monitoring & Logging
+
+### Payment Analytics
+- **Payment Success Rate**: Track payment completion rates
+- **Revenue Tracking**: Monitor daily/monthly revenue
+- **Error Tracking**: Log payment failures and reasons
+
+### Structured Logging
+```typescript
+// Payment success logging
+logger.info('Payment processed successfully', {
+  sessionId: session.id,
+  paymentIntentId: session.payment_intent,
+  amount: session.amount_total,
+  currency: session.currency,
+  customerEmail: session.customer_details?.email,
+});
+
+// Payment failure logging
+logger.error('Payment failed', {
+  paymentIntentId: paymentIntent.id,
+  amount: paymentIntent.amount,
+  currency: paymentIntent.currency,
+  lastError: paymentIntent.last_payment_error,
+});
+```
+
+## 🔧 Development & Deployment
+
+### Environment Configuration
+```bash
+# Required environment variables
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+KAFKA_BROKERS=localhost:9092
+PORT=3006
+```
+
+### Stripe Dashboard Setup
+1. **Create Stripe Account**: Set up Stripe account and get API keys
+2. **Webhook Configuration**: Configure webhook endpoint in Stripe dashboard
+3. **Product Creation**: Create products and prices in Stripe (automated via events)
+
+### Development Setup
+```bash
+# Install dependencies
+pnpm install
+
+# Start Stripe CLI for webhook testing
+stripe listen --forward-to localhost:3006/api/payments/webhooks/stripe
+
+# Start development server
+pnpm dev
+```
+
+### Docker Configuration
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+EXPOSE 3006
+CMD ["pnpm", "start"]
+```
+
+## 🧪 Testing
+
+### Test Structure
+- **Unit Tests**: Test individual payment functions
+- **Integration Tests**: Test Stripe API integration
+- **Webhook Tests**: Test webhook event processing
+
+### Test Examples
+```typescript
+describe('Payment Service', () => {
+  describe('POST /api/payments/create-checkout-session', () => {
+    it('should create checkout session successfully', async () => {
+      const checkoutData = {
+        products: [
+          {
+            name: 'Test Product',
+            price: 29.99,
+            quantity: 1,
+          },
+        ],
+        successUrl: 'https://example.com/success',
+        cancelUrl: 'https://example.com/cancel',
+      };
+
+      const response = await request(app)
+        .post('/api/payments/create-checkout-session')
+        .send(checkoutData)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('sessionId');
+      expect(response.body).toHaveProperty('url');
+    });
+  });
+
+  describe('Stripe Webhooks', () => {
+    it('should process checkout.session.completed', async () => {
+      const webhookEvent = {
+        id: 'evt_test_webhook',
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            id: 'cs_test_123',
+            payment_intent: 'pi_test_123',
+            amount_total: 2999,
+            currency: 'usd',
+            customer_details: {
+              email: 'test@example.com',
+            },
+          },
+        },
+      };
+
+      // Mock Stripe webhook verification
+      jest.spyOn(stripe.webhooks, 'constructEvent').mockReturnValue(webhookEvent);
+
+      const response = await request(app)
+        .post('/api/payments/webhooks/stripe')
+        .send(webhookEvent)
+        .expect(200);
+
+      expect(response.body).toEqual({ received: true });
+    });
+  });
+});
+```
+
+## 🔮 Future Enhancements
+
+### Planned Features
+- **Multiple Payment Methods**: Support for PayPal, Apple Pay, Google Pay
+- **Subscription Management**: Recurring payment support
+- **Payment Analytics**: Advanced payment insights and reporting
+- **Fraud Detection**: Integration with Stripe Radar
+- **Multi-currency Support**: Support for international currencies
+- **Payment Links**: Shareable payment links for products
+
+### Performance Improvements
+- **Webhook Queue**: Queue-based webhook processing for high volume
+- **Advanced Caching**: Redis integration for session and price caching
+- **Load Balancing**: Horizontal scaling for high traffic
+- **Database Integration**: Persistent storage for payment records
+
+### Security Enhancements
+- **Rate Limiting**: API rate limiting for payment endpoints
+- **Advanced Fraud Detection**: Custom fraud detection rules
+- **PCI Compliance**: Enhanced PCI compliance measures
+- **Audit Logging**: Comprehensive audit trail for all payment operations

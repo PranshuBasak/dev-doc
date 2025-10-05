@@ -1,0 +1,797 @@
+---
+title: API Endpoints
+description: Complete API reference for all microservices endpoints
+---
+
+# API Endpoints Reference
+
+This section provides a comprehensive reference for all API endpoints across the e-commerce platform microservices. Each service exposes RESTful APIs for communication with client applications and other services.
+
+## 🔧 Product Service API
+
+**Base URL**: `http://localhost:3001/api`
+
+### Products
+
+#### Get All Products
+```http
+GET /products
+```
+
+**Query Parameters**:
+- `page?: number` - Page number (default: 1)
+- `limit?: number` - Items per page (default: 20)
+- `category?: string` - Filter by category slug
+- `minPrice?: number` - Minimum price filter
+- `maxPrice?: number` - Maximum price filter
+- `sizes?: string` - Comma-separated sizes filter
+- `colors?: string` - Comma-separated colors filter
+- `search?: string` - Search query
+- `sortBy?: string` - Sort field (name, price, createdAt)
+- `sortOrder?: string` - Sort order (asc, desc)
+
+**Response**:
+```typescript
+{
+  products: Array<{
+    id: number;
+    name: string;
+    shortDescription: string;
+    description: string;
+    price: number;
+    sizes: string[];
+    colors: string[];
+    images: Record<string, string>;
+    categorySlug: string;
+    category: {
+      id: number;
+      name: string;
+      slug: string;
+    };
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  totalCount: number;
+  currentPage: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+```
+
+#### Get Product by ID
+```http
+GET /products/:id
+```
+
+**Response**:
+```typescript
+{
+  id: number;
+  name: string;
+  shortDescription: string;
+  description: string;
+  price: number;
+  sizes: string[];
+  colors: string[];
+  images: Record<string, string>;
+  categorySlug: string;
+  category: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+#### Create Product
+```http
+POST /products
+Authorization: Bearer <token>
+```
+
+**Request Body**:
+```typescript
+{
+  name: string;
+  shortDescription: string;
+  description: string;
+  price: number;
+  categorySlug: string;
+  sizes: string[];
+  colors: string[];
+  images: Record<string, string>;
+}
+```
+
+**Response**: Created product object
+
+#### Update Product
+```http
+PUT /products/:id
+Authorization: Bearer <token>
+```
+
+**Request Body**: Partial product data
+
+#### Delete Product
+```http
+DELETE /products/:id
+Authorization: Bearer <token>
+```
+
+### Categories
+
+#### Get All Categories
+```http
+GET /categories
+```
+
+**Response**:
+```typescript
+[
+  {
+    id: number;
+    name: string;
+    slug: string;
+    _count: {
+      products: number;
+    };
+  }
+]
+```
+
+#### Create Category
+```http
+POST /categories
+Authorization: Bearer <token>
+```
+
+**Request Body**:
+```typescript
+{
+  name: string;
+  slug: string;
+}
+```
+
+## 🛒 Order Service API
+
+**Base URL**: `http://localhost:3005/api`
+
+### Orders
+
+#### Get User Orders
+```http
+GET /orders/user/:userId
+Authorization: Bearer <token>
+```
+
+**Query Parameters**:
+- `page?: number` - Page number (default: 1)
+- `limit?: number` - Items per page (default: 10)
+- `status?: string` - Filter by status (success, failed)
+
+#### Get Order by ID
+```http
+GET /orders/:orderId
+Authorization: Bearer <token>
+```
+
+#### Get All Orders (Admin)
+```http
+GET /orders
+Authorization: Bearer <admin-token>
+```
+
+**Query Parameters**:
+- `page?: number`, `limit?: number` - Pagination
+- `status?: string` - Filter by status
+- `userId?: string` - Filter by user
+- `minAmount?: number`, `maxAmount?: number` - Amount filters
+- `startDate?: string`, `endDate?: string` - Date filters
+- `sortBy?: string`, `sortOrder?: string` - Sorting
+
+### Analytics
+
+#### Get Transaction Charts
+```http
+GET /orders/analytics/charts
+Authorization: Bearer <admin-token>
+```
+
+**Query Parameters**:
+- `period?: string` - Time period (6months, 1year, 2years)
+
+**Response**:
+```typescript
+{
+  chartData: Array<{
+    month: string;
+    total: number;
+    successful: number;
+  }>;
+  summary: {
+    totalOrders: number;
+    totalRevenue: number;
+    averageOrderValue: number;
+    successRate: number;
+  };
+}
+```
+
+#### Get Order Statistics
+```http
+GET /orders/analytics/statistics
+Authorization: Bearer <admin-token>
+```
+
+## 💳 Payment Service API
+
+**Base URL**: `http://localhost:3006/api`
+
+### Checkout Sessions
+
+#### Create Checkout Session
+```http
+POST /payments/create-checkout-session
+```
+
+**Request Body**:
+```typescript
+{
+  products: Array<{
+    name: string;
+    price: number;
+    quantity: number;
+    image?: string;
+  }>;
+  successUrl: string;
+  cancelUrl: string;
+  customerEmail?: string;
+  metadata?: Record<string, string>;
+}
+```
+
+**Response**:
+```typescript
+{
+  sessionId: string;
+  url: string;
+}
+```
+
+#### Verify Product Prices
+```http
+POST /payments/verify-prices
+```
+
+**Request Body**:
+```typescript
+{
+  products: Array<{
+    productId: string;
+    price: number;
+    quantity: number;
+  }>;
+}
+```
+
+**Response**:
+```typescript
+{
+  verified: boolean;
+  discrepancies?: Array<{
+    productId: string;
+    expectedPrice: number;
+    providedPrice: number;
+  }>;
+}
+```
+
+### Webhooks
+
+#### Stripe Webhook Handler
+```http
+POST /payments/webhooks/stripe
+```
+
+**Headers**:
+```
+Content-Type: application/json
+Stripe-Signature: t=123,v1=signature
+```
+
+## 🔐 Authentication Service API
+
+**Base URL**: `http://localhost:3007/api`
+
+### Users
+
+#### Get All Users
+```http
+GET /users
+Authorization: Bearer <admin-token>
+```
+
+**Query Parameters**:
+- `page?: number`, `limit?: number` - Pagination
+- `search?: string` - Search query
+- `role?: string` - Filter by role
+
+#### Get User by ID
+```http
+GET /users/:userId
+Authorization: Bearer <token>
+```
+
+#### Create User
+```http
+POST /users
+```
+
+**Request Body**:
+```typescript
+{
+  firstName: string;
+  lastName: string;
+  username: string;
+  emailAddress: string[];
+  password: string;
+}
+```
+
+#### Update User
+```http
+PUT /users/:userId
+Authorization: Bearer <token>
+```
+
+#### Delete User
+```http
+DELETE /users/:userId
+Authorization: Bearer <admin-token>
+```
+
+## 📧 Email Service API
+
+**Base URL**: `http://localhost:3008/api`
+
+The Email Service primarily consumes Kafka events and doesn't expose many HTTP endpoints. It processes email events and sends transactional emails.
+
+### Health Check
+```http
+GET /health
+```
+
+**Response**:
+```typescript
+{
+  status: string;
+  timestamp: string;
+  kafka: {
+    connected: boolean;
+    topics: string[];
+  };
+}
+```
+
+## 🔗 Service Communication
+
+### Inter-Service Communication
+
+Services communicate with each other using direct HTTP calls for synchronous operations:
+
+#### Client App → Product Service
+```typescript
+// Fetch products
+const response = await fetch('http://localhost:3001/api/products');
+const products = await response.json();
+```
+
+#### Client App → Payment Service
+```typescript
+// Create checkout session
+const response = await fetch('http://localhost:3006/api/payments/create-checkout-session', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(checkoutData),
+});
+```
+
+#### Admin Panel → Order Service
+```typescript
+// Fetch orders for admin
+const response = await fetch('http://localhost:3005/api/orders', {
+  headers: { 'Authorization': `Bearer ${adminToken}` }
+});
+```
+
+### Authentication Headers
+
+Most service endpoints require authentication:
+
+```typescript
+const headers = {
+  'Authorization': `Bearer ${jwtToken}`,
+  'Content-Type': 'application/json',
+};
+
+// For admin operations
+const adminHeaders = {
+  'Authorization': `Bearer ${adminJwtToken}`,
+  'Content-Type': 'application/json',
+};
+```
+
+## 🚨 Error Responses
+
+### Standard Error Format
+```typescript
+{
+  error: string;
+  message: string;
+  details?: any;
+  timestamp: string;
+}
+```
+
+### Common HTTP Status Codes
+
+#### 200 - Success
+Standard success response
+
+#### 201 - Created
+Resource successfully created
+
+#### 400 - Bad Request
+Invalid request data or validation errors
+
+#### 401 - Unauthorized
+Missing or invalid authentication token
+
+#### 403 - Forbidden
+Access denied (insufficient permissions)
+
+#### 404 - Not Found
+Resource not found
+
+#### 422 - Unprocessable Entity
+Validation errors in request data
+
+#### 500 - Internal Server Error
+Server-side error
+
+### Validation Error Example
+```typescript
+{
+  error: "Validation Error",
+  message: "Request validation failed",
+  details: [
+    {
+      field: "name",
+      message: "Product name is required!"
+    },
+    {
+      field: "price",
+      message: "Price must be greater than 0"
+    }
+  ],
+  timestamp: "2024-01-01T12:00:00Z"
+}
+```
+
+## 🔒 Authentication
+
+### JWT Token Format
+```typescript
+// Token payload
+{
+  sub: "user_id",
+  email: "user@example.com",
+  role: "user|admin",
+  iat: 1234567890,
+  exp: 1234567890
+}
+```
+
+### Token Validation
+Services validate JWT tokens from Clerk:
+
+```typescript
+// Middleware example
+const authenticateToken = async (req: Request, res: Response) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader?.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  try {
+    const payload = await clerk.verifyToken(token);
+    req.user = payload;
+  } catch (error) {
+    return res.status(403).json({ error: 'Invalid token' });
+  }
+};
+```
+
+## 📊 Response Formats
+
+### Paginated Response
+```typescript
+{
+  data: Array<any>;
+  totalCount: number;
+  currentPage: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+```
+
+### Product Response
+```typescript
+{
+  id: number;
+  name: string;
+  shortDescription: string;
+  description: string;
+  price: number;
+  sizes: string[];
+  colors: string[];
+  images: Record<string, string>;
+  categorySlug: string;
+  category: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+### Order Response
+```typescript
+{
+  _id: string;
+  userId: string;
+  email: string;
+  amount: number;
+  status: 'success' | 'failed';
+  products: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+## 🧪 Testing API Endpoints
+
+### Using cURL
+
+#### Get Products
+```bash
+curl -X GET "http://localhost:3001/api/products?page=1&limit=10" \
+  -H "Content-Type: application/json"
+```
+
+#### Create Product (Admin)
+```bash
+curl -X POST "http://localhost:3001/api/products" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <admin-token>" \
+  -d '{
+    "name": "Test Product",
+    "shortDescription": "A test product",
+    "description": "Detailed description",
+    "price": 29.99,
+    "categorySlug": "test-category",
+    "sizes": ["M", "L"],
+    "colors": ["red", "blue"],
+    "images": {
+      "red": "red.jpg",
+      "blue": "blue.jpg"
+    }
+  }'
+```
+
+#### Create Checkout Session
+```bash
+curl -X POST "http://localhost:3006/api/payments/create-checkout-session" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "products": [
+      {
+        "name": "Test Product",
+        "price": 29.99,
+        "quantity": 1
+      }
+    ],
+    "successUrl": "http://localhost:3002/success",
+    "cancelUrl": "http://localhost:3002/cart"
+  }'
+```
+
+### Using Thunder Client (VS Code)
+
+1. Install Thunder Client extension
+2. Create new request
+3. Set method and URL
+4. Add headers and body
+5. Send request
+
+### Postman Collection
+
+Import this JSON for a complete API collection:
+
+```json
+{
+  "info": {
+    "name": "E-commerce API Collection",
+    "description": "Complete API collection for e-commerce platform"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001"
+    }
+  ],
+  "item": [
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "Get All Products",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/products",
+            "header": []
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+## 🔍 API Health Checks
+
+### Service Health Endpoints
+
+#### Product Service Health
+```http
+GET /api/health
+```
+
+#### Order Service Health
+```http
+GET /api/health
+```
+
+#### Payment Service Health
+```http
+GET /api/health
+```
+
+#### Auth Service Health
+```http
+GET /api/health
+```
+
+### Health Response Format
+```typescript
+{
+  status: "healthy" | "unhealthy";
+  timestamp: string;
+  uptime: number;
+  version: string;
+  database: {
+    connected: boolean;
+    latency: number;
+  };
+  kafka: {
+    connected: boolean;
+    topics: string[];
+  };
+}
+```
+
+## 🚀 Rate Limiting
+
+### Default Limits
+- **General endpoints**: 100 requests per minute
+- **Admin endpoints**: 1000 requests per minute
+- **Payment endpoints**: 50 requests per minute
+
+### Rate Limit Headers
+```http
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 99
+X-RateLimit-Reset: 1640995200
+```
+
+### Rate Limited Response
+```http
+HTTP 429 Too Many Requests
+
+{
+  error: "Rate limit exceeded",
+  message: "Too many requests",
+  retryAfter: 60
+}
+```
+
+## 📈 API Versioning
+
+Current API version: **v1**
+
+### Version Header
+```http
+API-Version: v1
+```
+
+### URL Versioning (Future)
+```http
+/api/v1/products
+/api/v2/products
+```
+
+## 🔮 Future API Enhancements
+
+### Planned Endpoints
+
+#### Product Reviews API
+```http
+GET    /api/products/:id/reviews
+POST   /api/products/:id/reviews
+PUT    /api/products/:id/reviews/:reviewId
+DELETE /api/products/:id/reviews/:reviewId
+```
+
+#### Inventory API
+```http
+GET    /api/inventory
+PUT    /api/inventory/:productId
+GET    /api/inventory/low-stock
+```
+
+#### Analytics API
+```http
+GET    /api/analytics/sales
+GET    /api/analytics/customers
+GET    /api/analytics/products
+```
+
+### WebSocket Support
+Real-time API updates for live data:
+
+```typescript
+// WebSocket connection for real-time updates
+const ws = new WebSocket('ws://localhost:3001/api/events');
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Real-time update:', data);
+};
+```
+
+### GraphQL API (Future)
+```graphql
+query GetProducts($category: String) {
+  products(category: $category) {
+    id
+    name
+    price
+    category {
+      name
+    }
+  }
+}

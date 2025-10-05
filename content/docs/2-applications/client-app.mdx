@@ -1,0 +1,235 @@
+---
+title: Client Application
+description: E-commerce storefront built with Next.js and modern React patterns
+---
+
+# Client Application (Storefront)
+
+The Client Application is a modern, responsive e-commerce storefront built with Next.js 15 and React 19. It provides customers with a seamless shopping experience including product browsing, cart management, and secure checkout.
+
+## 🛠️ Technology Stack
+
+- **Framework**: Next.js 15 with App Router
+- **React**: React 19 with modern hooks and patterns
+- **Styling**: Tailwind CSS 4.0 for responsive design
+- **Authentication**: Clerk for user management and social login
+- **Payments**: Stripe.js for secure payment processing
+- **State Management**: Zustand for client-side state
+- **Forms**: React Hook Form with Zod validation
+- **Notifications**: React Toastify for user feedback
+
+## 🎨 User Interface & Experience
+
+### Design System
+- **Responsive Design**: Mobile-first approach with breakpoints for all devices
+- **Dark/Light Mode**: Theme switching capability
+- **Accessibility**: WCAG compliant with proper ARIA labels and keyboard navigation
+- **Performance**: Optimized images, lazy loading, and code splitting
+
+### Component Architecture
+```
+src/
+├── components/
+│   ├── ui/           # Reusable UI components
+│   ├── layout/       # Layout components (Header, Footer)
+│   ├── product/      # Product-related components
+│   ├── cart/         # Shopping cart components
+│   └── checkout/     # Checkout flow components
+├── stores/           # Zustand stores
+└── app/              # Next.js app directory
+```
+
+## 🛍️ Core Features
+
+### Product Catalog
+- **Product Grid**: Responsive grid layout with infinite scroll
+- **Filtering**: Filter by category, size, color, and price range
+- **Sorting**: Sort by date, price (low to high, high to low), popularity
+- **Search**: Real-time search with autocomplete suggestions
+
+#### Product Card Component
+```typescript
+interface ProductCardProps {
+  product: Product;
+  onAddToCart: (product: Product) => void;
+}
+
+const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
+  return (
+    <Card className="group relative overflow-hidden">
+      <ProductImage images={product.images} name={product.name} />
+      <CardContent>
+        <ProductInfo product={product} />
+        <AddToCartButton onClick={() => onAddToCart(product)} />
+      </CardContent>
+    </Card>
+  );
+};
+```
+
+### Product Details Page
+Individual product pages with:
+- **Image Gallery**: Multiple product images with zoom functionality
+- **Variant Selection**: Size and color selection with visual feedback
+- **Quantity Selector**: Increment/decrement quantity controls
+- **Product Description**: Rich text description with specifications
+- **Related Products**: AI-powered product recommendations
+- **Reviews**: Customer reviews and ratings (future feature)
+
+### Shopping Cart
+- **Persistent Cart**: Cart state maintained across browser sessions
+- **Real-time Updates**: Live price calculations and inventory checks
+- **Guest Checkout**: Cart accessible without user registration
+- **Cart Sharing**: Share cart contents via URL
+
+#### Cart State Management
+```typescript
+// Zustand store for cart management
+interface CartStore {
+  cart: CartItem[];
+  addToCart: (item: CartItem) => void;
+  removeFromCart: (itemId: string) => void;
+  updateQuantity: (itemId: string, quantity: number) => void;
+  clearCart: () => void;
+}
+```
+
+### Checkout Flow
+
+#### 1. Cart Review
+- Item summary with quantity and price
+- Apply coupon codes (future feature)
+- Shipping method selection
+- Order total calculation
+
+#### 2. Shipping Information
+- **Form Validation**: Real-time validation with Zod schemas
+- **Address Auto-complete**: Google Places API integration (future)
+- **Guest Checkout**: Optional user registration during checkout
+
+```typescript
+const shippingFormSchema = z.object({
+  name: z.string().min(1, "Name is required!"),
+  email: z.string().email("Invalid email format"),
+  phone: z.string().min(7).max(10),
+  address: z.string().min(1, "Address is required!"),
+  city: z.string().min(1, "City is required!"),
+});
+```
+
+#### 3. Payment Processing
+- **Stripe Integration**: Secure payment form with PCI compliance
+- **Payment Methods**: Credit card, debit card, digital wallets
+- **Real-time Validation**: Card validation and error handling
+- **3D Secure**: Enhanced security for online transactions
+
+#### 4. Order Confirmation
+- **Order Summary**: Complete order details and tracking number
+- **Email Confirmation**: Automatic email sent via Email Service
+- **Download Receipt**: PDF receipt generation (future feature)
+- **Continue Shopping**: Easy navigation back to product catalog
+
+## 🔐 Authentication & User Management
+
+### Clerk Integration
+- **Social Login**: Google, GitHub, and other OAuth providers
+- **Email/Password**: Traditional registration and login
+- **Password Reset**: Secure password recovery flow
+- **User Profiles**: Profile management and order history
+
+### Protected Routes
+```typescript
+// Middleware for route protection
+export default clerkMiddleware((auth, req) => {
+  if (isProtectedRoute(req)) auth().protect();
+});
+```
+
+### User Context
+- **User Preferences**: Saved payment methods and addresses
+- **Order History**: Complete order history with status tracking
+- **Wishlist**: Save products for later (future feature)
+- **Reviews**: Leave reviews for purchased products
+
+## 🛒 State Management
+
+### Zustand Stores
+- **Cart Store**: Shopping cart state and actions
+- **User Store**: User authentication and profile data
+- **UI Store**: Global UI state (modals, loading states)
+
+### Server State
+- **React Query**: Server state management and caching
+- **Optimistic Updates**: Immediate UI feedback with server synchronization
+- **Error Handling**: Graceful error handling with retry mechanisms
+
+## 🎯 Performance Optimizations
+
+### Next.js Features
+- **App Router**: Latest Next.js routing with layouts and loading states
+- **Server Components**: Reduced client-side JavaScript bundle
+- **Image Optimization**: Automatic image optimization and WebP conversion
+- **Code Splitting**: Automatic route-based code splitting
+
+### Performance Metrics
+- **Core Web Vitals**: Optimized for Google's performance metrics
+- **Bundle Analysis**: Regular bundle size monitoring
+- **Caching Strategy**: Effective use of HTTP caching headers
+
+## 🔧 Development Features
+
+### Development Tools
+- **Hot Reload**: Instant updates during development
+- **TypeScript**: Full type safety with IntelliSense support
+- **ESLint**: Code quality and consistency enforcement
+- **Prettier**: Automatic code formatting
+
+### Project Structure
+```
+apps/client/
+├── src/
+│   ├── app/              # Next.js app directory
+│   │   ├── (auth)/       # Authentication routes
+│   │   ├── products/     # Product catalog routes
+│   │   ├── cart/         # Shopping cart routes
+│   │   ├── checkout/     # Checkout flow routes
+│   │   └── api/          # API routes
+│   ├── components/       # React components
+│   ├── stores/          # Zustand stores
+│   └── lib/             # Utility functions
+├── public/              # Static assets
+└── middleware.ts        # Next.js middleware
+```
+
+## 🚀 Deployment
+
+### Build Process
+- **Turborepo**: Integrated build process with other services
+- **Docker**: Containerized deployment (future feature)
+- **CDN**: Static asset delivery via CDN
+- **Monitoring**: Error tracking and performance monitoring
+
+### Environment Configuration
+```bash
+# Required environment variables
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
+NEXT_PUBLIC_API_URL=http://localhost:3001
+```
+
+## 🔮 Future Enhancements
+
+### Planned Features
+- **Product Reviews**: Customer review and rating system
+- **Wishlist**: Save products for later purchase
+- **Product Recommendations**: AI-powered product suggestions
+- **Advanced Search**: Filters, categories, and search refinement
+- **Mobile App**: React Native companion app
+- **Internationalization**: Multi-language support
+- **Analytics**: User behavior tracking and insights
+
+### Technical Improvements
+- **PWA Features**: Offline support and push notifications
+- **Advanced Caching**: Redis integration for better performance
+- **Real-time Updates**: WebSocket integration for live inventory
+- **A/B Testing**: Feature flag system for experimentation

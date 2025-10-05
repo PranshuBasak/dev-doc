@@ -1,0 +1,14 @@
+{
+  "title": "Documentation",
+  "description": "Comprehensive documentation for the e-commerce microservices platform",
+  "root": true,
+  "pages": [
+    "index",
+    "1-architecture",
+    "2-applications",
+    "3-services",
+    "4-shared-packages",
+    "5-development",
+    "6-api-reference"
+  ]
+}

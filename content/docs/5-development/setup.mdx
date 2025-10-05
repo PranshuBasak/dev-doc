@@ -1,0 +1,604 @@
+---
+title: Development Setup
+description: Complete guide to set up the development environment for the e-commerce platform
+---
+
+# Development Setup
+
+This guide provides step-by-step instructions to set up the complete development environment for the e-commerce microservices platform. Follow these instructions to get the entire system running locally.
+
+## 🛠️ Prerequisites
+
+### Required Software
+- **Node.js**: Version 18 or higher
+- **pnpm**: Version 9.0.0 or higher (recommended package manager)
+- **Git**: For version control
+- **Docker**: For running databases and Kafka (optional but recommended)
+
+### Optional but Recommended
+- **Visual Studio Code**: With recommended extensions
+- **Docker Desktop**: For containerized services
+
+### System Requirements
+- **RAM**: 8GB minimum, 16GB recommended
+- **Storage**: 10GB free space
+- **Network**: Internet connection for package installation
+
+## 🚀 Quick Start
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/PranshuBasak/microservices-ecommerce.git
+cd microservices-ecommerce
+```
+
+### 2. Install Dependencies
+```bash
+# Install all dependencies across the monorepo
+pnpm install
+```
+
+### 3. Set Up Environment Variables
+Copy the example environment files and configure them:
+
+```bash
+# Copy environment examples (create these files first)
+cp apps/product-service/.env.example apps/product-service/.env
+cp apps/order-service/.env.example apps/order-service/.env
+cp apps/payment-service/.env.example apps/payment-service/.env
+cp apps/auth-service/.env.example apps/auth-service/.env
+cp apps/email-service/.env.example apps/email-service/.env
+cp apps/client/.env.example apps/client/.env
+cp apps/admin/.env.example apps/admin/.env
+```
+
+### 4. Start Infrastructure Services
+```bash
+# Start Kafka and databases using Docker
+cd packages/kafka
+docker-compose up -d
+
+# Start PostgreSQL for products
+docker run -d \
+  --name postgres-products \
+  -e POSTGRES_DB=ecom_products \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=password \
+  -p 5432:5432 \
+  postgres:15-alpine
+
+# Start MongoDB for orders
+docker run -d \
+  --name mongodb-orders \
+  -e MONGO_INITDB_DATABASE=ecom_orders \
+  -p 27017:27017 \
+  mongo:7.0
+```
+
+### 5. Set Up Databases
+```bash
+# Generate Prisma client and run migrations
+pnpm db:generate
+pnpm db:migrate
+
+# Verify database connections
+pnpm db:deploy
+```
+
+### 6. Start Development Servers
+```bash
+# Start all services in development mode
+pnpm dev
+
+# Or start individual services
+pnpm dev --filter=client        # Client app (port 3002)
+pnpm dev --filter=admin         # Admin panel (port 3003)
+pnpm dev --filter=dev-doc       # Documentation (port 3004)
+pnpm dev --filter=product-service  # Product service (port 3001)
+pnpm dev --filter=order-service    # Order service (port 3005)
+pnpm dev --filter=payment-service  # Payment service (port 3006)
+pnpm dev --filter=auth-service     # Auth service (port 3007)
+pnpm dev --filter=email-service    # Email service (port 3008)
+```
+
+## 📋 Detailed Setup Instructions
+
+### Environment Configuration
+
+#### Product Service (.env)
+```bash
+# Database
+DATABASE_URL=postgresql://postgres:password@localhost:5432/ecom_products
+
+# Kafka
+KAFKA_BROKERS=localhost:9092
+
+# Server
+PORT=3001
+NODE_ENV=development
+
+# JWT (for internal service communication)
+JWT_SECRET=your-jwt-secret-key
+```
+
+#### Order Service (.env)
+```bash
+# Database
+MONGODB_URI=mongodb://localhost:27017/ecom_orders
+
+# Kafka
+KAFKA_BROKERS=localhost:9092
+
+# Server
+PORT=3005
+NODE_ENV=development
+
+# JWT
+JWT_SECRET=your-jwt-secret-key
+```
+
+#### Payment Service (.env)
+```bash
+# Stripe (get these from your Stripe dashboard)
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# Kafka
+KAFKA_BROKERS=localhost:9092
+
+# Server
+PORT=3006
+NODE_ENV=development
+```
+
+#### Auth Service (.env)
+```bash
+# Clerk (get these from your Clerk dashboard)
+CLERK_SECRET_KEY=sk_test_your_clerk_secret_key
+CLERK_WEBHOOK_SECRET=whsec_your_clerk_webhook_secret
+
+# Kafka
+KAFKA_BROKERS=localhost:9092
+
+# Server
+PORT=3007
+NODE_ENV=development
+```
+
+#### Email Service (.env)
+```bash
+# Gmail (for transactional emails)
+GMAIL_USER=your-email@gmail.com
+GMAIL_APP_PASSWORD=your-gmail-app-password
+
+# Email Configuration
+FROM_EMAIL=noreply@yourstore.com
+APP_NAME=Your Store Name
+
+# Kafka
+KAFKA_BROKERS=localhost:9092
+
+# Server
+PORT=3008
+NODE_ENV=development
+```
+
+#### Client Application (.env.local)
+```bash
+# Clerk (frontend keys)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key
+CLERK_SECRET_KEY=sk_test_your_clerk_secret_key
+
+# Stripe (frontend keys)
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+
+# API URLs
+NEXT_PUBLIC_API_URL=http://localhost:3001
+NEXT_PUBLIC_PAYMENT_API_URL=http://localhost:3006
+NEXT_PUBLIC_AUTH_API_URL=http://localhost:3007
+```
+
+#### Admin Panel (.env.local)
+```bash
+# Clerk (frontend keys)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key
+CLERK_SECRET_KEY=sk_test_your_clerk_secret_key
+
+# API URLs
+NEXT_PUBLIC_API_URL=http://localhost:3001
+NEXT_PUBLIC_ORDER_API_URL=http://localhost:3005
+NEXT_PUBLIC_AUTH_API_URL=http://localhost:3007
+```
+
+### Database Setup
+
+#### PostgreSQL Setup (Product Database)
+```bash
+# 1. Connect to PostgreSQL
+psql -h localhost -U postgres -d ecom_products
+
+# 2. Verify database exists
+\list
+
+# 3. Check tables (after migrations)
+\dt
+
+# 4. Exit PostgreSQL
+\q
+```
+
+#### MongoDB Setup (Order Database)
+```bash
+# 1. Connect to MongoDB
+mongosh mongodb://localhost:27017/ecom_orders
+
+# 2. Show databases
+show dbs
+
+# 3. Use the orders database
+use ecom_orders
+
+# 4. Show collections (after first order)
+show collections
+
+# 5. Exit MongoDB
+exit
+```
+
+### Service Health Checks
+
+#### Check Kafka Health
+```bash
+# List Kafka topics
+docker exec kafka kafka-topics --list --bootstrap-server localhost:9092
+
+# Create a test topic
+docker exec kafka kafka-topics --create --topic test-topic --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+
+# Check topic details
+docker exec kafka kafka-topics --describe --topic test-topic --bootstrap-server localhost:9092
+```
+
+#### Check Database Connections
+```bash
+# Test PostgreSQL connection
+pg_isready -h localhost -p 5432 -d ecom_products
+
+# Test MongoDB connection
+mongosh --eval "db.adminCommand('ping')" mongodb://localhost:27017/ecom_orders
+```
+
+## 🔧 Development Workflow
+
+### Starting Services Individually
+
+#### Start Infrastructure First
+```bash
+# Terminal 1: Kafka and Zookeeper
+cd packages/kafka
+docker-compose up -d
+
+# Terminal 2: PostgreSQL
+docker run -d --name postgres-products -e POSTGRES_DB=ecom_products -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password -p 5432:5432 postgres:15-alpine
+
+# Terminal 3: MongoDB
+docker run -d --name mongodb-orders -e MONGO_INITDB_DATABASE=ecom_orders -p 27017:27017 mongo:7.0
+```
+
+#### Start Backend Services
+```bash
+# Terminal 4: Product Service
+pnpm dev --filter=product-service
+
+# Terminal 5: Order Service
+pnpm dev --filter=order-service
+
+# Terminal 6: Payment Service
+pnpm dev --filter=payment-service
+
+# Terminal 7: Auth Service
+pnpm dev --filter=auth-service
+
+# Terminal 8: Email Service
+pnpm dev --filter=email-service
+```
+
+#### Start Frontend Applications
+```bash
+# Terminal 9: Client Application
+pnpm dev --filter=client
+
+# Terminal 10: Admin Panel
+pnpm dev --filter=admin
+
+# Terminal 11: Documentation
+pnpm dev --filter=dev-doc
+```
+
+### Development Commands
+
+#### Database Commands
+```bash
+# Generate Prisma client
+pnpm db:generate
+
+# Create new migration
+pnpm db:migrate dev --name "add-user-table"
+
+# Deploy migrations to production
+pnpm db:deploy
+
+# Reset database (development only)
+pnpm db:reset
+
+# Seed database
+pnpm db:seed
+
+# View database
+pnpm db:studio
+```
+
+#### Build Commands
+```bash
+# Build all services
+pnpm build
+
+# Build specific service
+pnpm build --filter=client
+
+# Type checking
+pnpm check-types
+
+# Linting
+pnpm lint
+
+# Format code
+pnpm format
+```
+
+#### Testing Commands
+```bash
+# Run all tests
+pnpm test
+
+# Run tests for specific service
+pnpm test --filter=product-service
+
+# Run tests in watch mode
+pnpm test:watch
+
+# Generate test coverage
+pnpm test:coverage
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+#### Port Conflicts
+If you encounter port conflicts, modify the Docker port mappings:
+
+```bash
+# PostgreSQL on different port
+docker run -d --name postgres-products \
+  -e POSTGRES_DB=ecom_products \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=password \
+  -p 5433:5432 \
+  postgres:15-alpine
+
+# Update DATABASE_URL accordingly
+DATABASE_URL=postgresql://postgres:password@localhost:5433/ecom_products
+```
+
+#### Kafka Connection Issues
+```bash
+# Check if Kafka containers are running
+docker ps | grep kafka
+
+# Check Kafka logs
+docker logs kafka
+
+# Restart Kafka if needed
+cd packages/kafka
+docker-compose restart
+```
+
+#### Database Connection Issues
+```bash
+# Check PostgreSQL container
+docker logs postgres-products
+
+# Check MongoDB container
+docker logs mongodb-orders
+
+# Test connections manually
+pg_isready -h localhost -p 5432
+mongosh --eval "db.adminCommand('ping')"
+```
+
+#### Service Startup Issues
+```bash
+# Check service logs
+pnpm dev --filter=product-service
+
+# Verify environment variables are loaded
+echo $DATABASE_URL
+
+# Check if ports are available
+netstat -tulpn | grep :3001
+```
+
+### Debug Mode
+
+#### Enable Debug Logging
+```bash
+# Set debug environment variable
+DEBUG=* pnpm dev --filter=product-service
+
+# Or add to .env file
+DEBUG=*
+LOG_LEVEL=debug
+```
+
+#### Database Debugging
+```bash
+# Enable Prisma query logging
+DEBUG=prisma:* pnpm dev --filter=product-service
+
+# Enable MongoDB debugging
+DEBUG=mongoose:* pnpm dev --filter=order-service
+```
+
+## 🚀 Production Deployment
+
+### Docker Compose for Production
+```yaml
+version: '3.8'
+services:
+  # PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ecom_products
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ecom-network
+
+  # MongoDB
+  mongodb:
+    image: mongo:7.0
+    environment:
+      MONGO_INITDB_DATABASE: ecom_orders
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - ecom-network
+
+  # Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - ecom-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+    networks:
+      - ecom-network
+
+  # Services
+  product-service:
+    build: ./apps/product-service
+    depends_on:
+      - postgres
+      - kafka
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/ecom_products
+      KAFKA_BROKERS: kafka:9092
+    networks:
+      - ecom-network
+
+  # Add other services similarly...
+
+volumes:
+  postgres_data:
+  mongodb_data:
+
+networks:
+  ecom-network:
+    driver: bridge
+```
+
+### Environment Variables for Production
+```bash
+# Production environment variables
+NODE_ENV=production
+
+# Database URLs (use strong passwords)
+DATABASE_URL=postgresql://user:strong_password@host:5432/db
+MONGODB_URI=mongodb://user:strong_password@host:27017/db
+
+# JWT secrets (generate strong secrets)
+JWT_SECRET=your-super-secure-jwt-secret
+
+# Stripe (production keys)
+STRIPE_SECRET_KEY=sk_live_your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# Clerk (production keys)
+CLERK_SECRET_KEY=sk_live_your_clerk_secret_key
+
+# Email (production SMTP)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+```
+
+## 🔧 IDE Setup
+
+### Visual Studio Code Extensions
+Install these recommended extensions:
+
+- **ESLint**: Code linting
+- **Prettier**: Code formatting
+- **TypeScript Hero**: TypeScript utilities
+- **Prisma**: Prisma schema support
+- **Docker**: Docker file support
+- **Thunder Client**: API testing
+
+### Workspace Settings
+```json
+// .vscode/settings.json
+{
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "eslint.workingDirectories": ["apps", "packages"],
+  "files.associations": {
+    "*.mdx": "markdown"
+  }
+}
+```
+
+## 📚 Additional Resources
+
+### Useful Commands
+```bash
+# View all available scripts
+pnpm run
+
+# Check service status
+docker ps
+
+# View logs for all services
+docker-compose logs
+
+# Clean up everything
+docker-compose down -v
+```
+
+### Getting Help
+- **Documentation**: Visit http://localhost:3004 when dev server is running
+- **Issues**: Check GitHub issues for common problems
+- **Discussions**: Use GitHub discussions for questions
+
+### Next Steps
+1. ✅ Complete the setup guide above
+2. 🎯 Start with the client application development
+3. 📖 Read through the service documentation
+4. 🚀 Begin implementing features
+
+Happy coding! 🎉

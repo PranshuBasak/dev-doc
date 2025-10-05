@@ -1,0 +1,215 @@
+---
+title: Architecture Overview
+description: High-level system architecture and design principles
+---
+
+# Architecture Overview
+
+This e-commerce application is built using a **microservices architecture** within a **Turborepo monorepo**, designed for scalability, maintainability, and developer productivity.
+
+## 🎯 Design Principles
+
+### Microservices Architecture
+The application is decomposed into independent, loosely-coupled services that communicate asynchronously through events. Each service:
+
+- **Owns its own data**: Services manage their own databases and data models
+- **Has clear boundaries**: Single Responsibility Principle applied at service level
+- **Can be deployed independently**: Services can be scaled and updated separately
+- **Communicates via events**: Asynchronous messaging for loose coupling
+
+### Monorepo Structure
+All services and applications are organized in a single repository using Turborepo, providing:
+
+- **Shared tooling**: Consistent development experience across all services
+- **Atomic commits**: Changes across multiple services in single commits
+- **Shared packages**: Reusable utilities, types, and configurations
+- **Efficient caching**: Turborepo's build caching for faster development
+
+## 🏗️ System Architecture
+
+<Mermaid
+  chart="
+graph TB
+    subgraph 'Client Applications'
+        Client[🏪 Client Storefront<br/>Next.js + React]
+        Admin[⚙️ Admin Panel<br/>Next.js + Shadcn/UI]
+    end
+
+    subgraph 'Backend Services'
+        Auth[🔐 Auth Service<br/>Express + Clerk]
+        Product[📦 Product Service<br/>Express + PostgreSQL]
+        Order[🛒 Order Service<br/>Fastify + MongoDB]
+        Payment[💳 Payment Service<br/>Hono + Stripe]
+        Email[📧 Email Service<br/>Node.js + Nodemailer]
+    end
+
+    subgraph 'Infrastructure'
+        Kafka[📨 Apache Kafka<br/>Event Streaming]
+        PostgreSQL[(🗄️ PostgreSQL<br/>Product Data)]
+        MongoDB[(🍃 MongoDB<br/>Order Data)]
+    end
+
+    Client --> Product
+    Client --> Payment
+    Admin --> Product
+    Admin --> Order
+    Admin --> Auth
+
+    Product --> PostgreSQL
+    Order --> MongoDB
+    Email --> Kafka
+
+    Product --> Kafka
+    Payment --> Kafka
+    Auth --> Kafka
+
+    Kafka --> Order
+    Kafka --> Email
+    Kafka --> Payment
+
+    classDef client fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef service fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef infra fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+
+    class Client,Admin client
+    class Auth,Product,Order,Payment,Email service
+    class Kafka,PostgreSQL,MongoDB infra
+"
+/>
+
+## 🏢 Service Architecture
+
+### Frontend Applications
+
+#### Client Application (Port 3002)
+- **Technology**: Next.js 15, React 19, Tailwind CSS
+- **Purpose**: Customer-facing e-commerce storefront
+- **Features**: Product browsing, cart management, checkout, user authentication
+
+#### Admin Panel (Port 3003)
+- **Technology**: Next.js 15, React 19, Shadcn/UI, TanStack Table
+- **Purpose**: Administrative interface for managing the platform
+- **Features**: Product management, order processing, user administration, analytics
+
+#### Documentation Site (Port 3004)
+- **Technology**: Fumadocs, Next.js 15
+- **Purpose**: Developer and API documentation
+- **Features**: Interactive docs, API references, guides
+
+### Backend Services
+
+#### Product Service
+- **Technology**: Express.js, PostgreSQL, Prisma ORM
+- **Purpose**: Manages product catalog and inventory
+- **Database**: PostgreSQL with product and category schemas
+
+#### Order Service
+- **Technology**: Fastify, MongoDB, Mongoose
+- **Purpose**: Handles order creation and management
+- **Database**: MongoDB for flexible order schemas
+
+#### Payment Service
+- **Technology**: Hono, Stripe API
+- **Purpose**: Processes payments and manages Stripe integration
+- **Features**: Checkout sessions, webhook handling, price verification
+
+#### Authentication Service
+- **Technology**: Express.js, Clerk API
+- **Purpose**: Centralized user management and authentication
+- **Features**: User CRUD operations, JWT token management
+
+#### Email Service
+- **Technology**: Node.js, Nodemailer
+- **Purpose**: Sends transactional emails to users
+- **Features**: Welcome emails, order confirmations
+
+### Shared Infrastructure
+
+#### Kafka (Message Queue)
+- **Technology**: Apache Kafka with Docker Compose
+- **Purpose**: Event streaming and asynchronous communication
+- **Topics**: product.events, order.events, user.events, payment.events
+
+#### Shared Packages
+- **@repo/types**: TypeScript type definitions
+- **@repo/kafka**: Kafka client and utilities
+- **@repo/product-db**: Prisma client and schemas
+- **@repo/order-db**: MongoDB connection and models
+- **@repo/eslint-config**: Shared linting rules
+- **@repo/typescript-config**: Shared TypeScript configuration
+
+## 🔄 Communication Patterns
+
+### Synchronous Communication
+- **HTTP/REST APIs**: Services expose REST endpoints for direct communication
+- **Client-to-Service**: Frontend applications call service APIs directly
+- **Service-to-Service**: Services call other services' APIs when needed
+
+### Asynchronous Communication
+- **Event-Driven**: Services publish events to Kafka topics
+- **Loose Coupling**: Services subscribe to events without direct dependencies
+- **Reliability**: Events can be replayed and processed multiple times
+
+### Event Flow Examples
+
+#### Product Creation
+1. Admin creates product via Admin Panel
+2. Product Service saves to PostgreSQL
+3. Product Service publishes `product.created` event to Kafka
+4. Payment Service subscribes and creates Stripe product
+5. Email Service subscribes and sends notifications (if needed)
+
+#### Order Placement
+1. Customer completes checkout in Client App
+2. Payment Service processes payment with Stripe
+3. Payment Service publishes `payment.successful` event to Kafka
+4. Order Service subscribes and creates order record
+5. Email Service subscribes and sends confirmation email
+
+## 📊 Data Architecture
+
+### Database Strategy
+- **PostgreSQL**: Structured data, relationships, ACID compliance
+  - Products, Categories, Users (via Clerk)
+- **MongoDB**: Flexible schemas, document-based data
+  - Orders, Shopping Carts, Analytics data
+
+### Data Consistency
+- **Eventual Consistency**: Services maintain consistency through events
+- **Compensating Transactions**: Failed operations trigger compensating events
+- **Idempotent Operations**: Events can be processed multiple times safely
+
+## 🚀 Scalability Considerations
+
+### Horizontal Scaling
+- **Stateless Services**: All services designed to be stateless
+- **Database Scaling**: Read replicas for read-heavy operations
+- **Kafka Partitioning**: Events distributed across multiple partitions
+
+### Performance Optimization
+- **Caching**: Redis for session storage and frequently accessed data
+- **CDN**: Static assets served via CDN
+- **Database Indexing**: Optimized queries with proper indexing
+
+### Monitoring & Observability
+- **Logging**: Centralized logging across all services
+- **Metrics**: Performance and business metrics collection
+- **Tracing**: Distributed tracing for request flow visibility
+
+## 🔒 Security Architecture
+
+### Authentication & Authorization
+- **Clerk Integration**: Centralized authentication across all applications
+- **JWT Tokens**: Secure API communication with signed tokens
+- **Role-Based Access**: Admin vs customer permissions
+
+### Data Protection
+- **HTTPS Only**: All communications encrypted in transit
+- **Input Validation**: Zod schemas for runtime type checking
+- **SQL Injection Prevention**: Parameterized queries with Prisma
+- **XSS Protection**: React's built-in XSS protection
+
+### Infrastructure Security
+- **Environment Variables**: Sensitive data in environment variables
+- **API Keys**: Secure storage and rotation of API keys
+- **CORS**: Properly configured cross-origin policies

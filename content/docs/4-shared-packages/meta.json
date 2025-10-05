@@ -1,0 +1,9 @@
+{
+  "title": "📚 Shared Packages",
+  "description": "Reusable utilities, types, and configurations",
+  "pages": [
+    "types",
+    "kafka",
+    "databases"
+  ]
+}

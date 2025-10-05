@@ -1,0 +1,4 @@
+
+> dev-doc@0.0.0 check-types C:\Others\proj\microservices-ecommerce\apps\dev-doc
+> tsc --noEmit
+

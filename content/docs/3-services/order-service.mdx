@@ -1,0 +1,502 @@
+---
+title: Order Service
+description: Handles order creation, management, and analytics with MongoDB
+---
+
+# Order Service
+
+The Order Service manages customer orders, tracks order lifecycle, and provides analytics data for the e-commerce platform. Built with Fastify and MongoDB, it handles order creation from payment events and provides comprehensive order management capabilities.
+
+## 🛠️ Technology Stack
+
+- **Runtime**: Node.js 18+
+- **Framework**: Fastify with TypeScript
+- **Database**: MongoDB with Mongoose ODM
+- **Validation**: Zod for runtime type checking
+- **Events**: Kafka consumer for payment events
+- **Caching**: In-memory caching for frequently accessed data
+- **Logging**: Winston for structured logging
+- **Error Handling**: Custom error classes and global error handler
+
+## 🏗️ Architecture
+
+### Service Structure
+```
+apps/order-service/
+├── src/
+│   ├── controllers/     # Request handlers
+│   ├── middleware/      # Custom middleware
+│   ├── routes/          # Route definitions
+│   ├── utils/           # Utility functions
+│   ├── models/          # Mongoose models
+│   ├── services/        # Business logic services
+│   ├── consumers/       # Kafka event consumers
+│   ├── index.ts         # Application entry point
+│   └── types/           # Local type definitions
+├── package.json
+```
+
+### Database Schema
+```typescript
+// Order schema with Mongoose
+const OrderSchema = new Schema(
+  {
+    userId: { type: String, required: true },
+    email: { type: String, required: true },
+    amount: { type: Number, required: true },
+    status: {
+      type: String,
+      required: true,
+      enum: ['success', 'failed']
+    },
+    products: {
+      type: [
+        {
+          name: { type: String, required: true },
+          quantity: { type: Number, required: true },
+          price: { type: Number, required: true },
+        },
+      ],
+      required: true,
+    },
+  },
+  { timestamps: true }
+);
+
+export interface OrderSchemaType extends InferSchemaType<typeof OrderSchema> {
+  _id: string;
+}
+```
+
+## 🔧 Core Functionality
+
+### Order Management
+
+#### Get User Orders
+Retrieves all orders for a specific user with pagination.
+
+**Endpoint**: `GET /api/orders/user/:userId`
+
+**Query Parameters**:
+- `page?: number` - Page number for pagination
+- `limit?: number` - Items per page (default: 10)
+- `status?: 'success' | 'failed'` - Filter by order status
+
+**Response**:
+```typescript
+{
+  orders: Order[];
+  totalCount: number;
+  currentPage: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+```
+
+#### Get Order by ID
+Retrieves a specific order with full details.
+
+**Endpoint**: `GET /api/orders/:orderId`
+
+**Response**:
+```typescript
+{
+  _id: string;
+  userId: string;
+  email: string;
+  amount: number;
+  status: 'success' | 'failed';
+  products: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+#### Get All Orders (Admin)
+Retrieves all orders with advanced filtering for admin users.
+
+**Endpoint**: `GET /api/orders`
+
+**Query Parameters**:
+- `page?: number` - Page number for pagination
+- `limit?: number` - Items per page (default: 20)
+- `status?: 'success' | 'failed'` - Filter by order status
+- `userId?: string` - Filter by user ID
+- `minAmount?: number` - Minimum order amount
+- `maxAmount?: number` - Maximum order amount
+- `startDate?: string` - Start date filter (ISO string)
+- `endDate?: string` - End date filter (ISO string)
+- `sortBy?: 'createdAt' | 'amount' | 'status'` - Sort field
+- `sortOrder?: 'asc' | 'desc'` - Sort direction
+
+### Order Analytics
+
+#### Transaction Charts
+Provides aggregated order data for dashboard charts.
+
+**Endpoint**: `GET /api/orders/analytics/charts`
+
+**Query Parameters**:
+- `period?: '6months' | '1year' | '2years'` - Time period for analysis
+
+**Response**:
+```typescript
+{
+  chartData: Array<{
+    month: string;
+    total: number;
+    successful: number;
+  }>;
+  summary: {
+    totalOrders: number;
+    totalRevenue: number;
+    averageOrderValue: number;
+    successRate: number;
+  };
+}
+```
+
+#### Order Statistics
+Provides comprehensive order statistics.
+
+**Endpoint**: `GET /api/orders/analytics/statistics`
+
+**Response**:
+```typescript
+{
+  totalOrders: number;
+  totalRevenue: number;
+  averageOrderValue: number;
+  successRate: number;
+  ordersByStatus: Record<string, number>;
+  topProducts: Array<{
+    name: string;
+    count: number;
+    revenue: number;
+  }>;
+}
+```
+
+## 🔄 Event Consumption
+
+The Order Service consumes events from Kafka to create orders automatically:
+
+### Payment Events
+
+#### payment.successful
+Consumed when a payment is successfully processed.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'payment.successful';
+  timestamp: string;
+  data: {
+    userId: string;
+    email: string;
+    amount: number;
+    products: Array<{
+      name: string;
+      quantity: number;
+      price: number;
+    }>;
+    paymentIntentId: string;
+  };
+}
+```
+
+**Processing Logic**:
+1. Validate payment data
+2. Create order record in MongoDB
+3. Update product inventory (future feature)
+4. Send confirmation email via Email Service
+
+#### payment.failed
+Consumed when a payment fails.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'payment.failed';
+  timestamp: string;
+  data: {
+    userId: string;
+    email: string;
+    amount: number;
+    reason: string;
+  };
+}
+```
+
+## 🛡️ Validation & Error Handling
+
+### Input Validation
+```typescript
+import { z } from 'zod';
+
+export const GetOrdersQuerySchema = z.object({
+  page: z.string().transform(Number).optional(),
+  limit: z.string().transform(Number).optional(),
+  status: z.enum(['success', 'failed']).optional(),
+  userId: z.string().optional(),
+  minAmount: z.string().transform(Number).optional(),
+  maxAmount: z.string().transform(Number).optional(),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  sortBy: z.enum(['createdAt', 'amount', 'status']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+});
+```
+
+### Error Handling
+```typescript
+// Custom error classes
+export class OrderNotFoundError extends Error {
+  constructor(orderId: string) {
+    super(`Order with ID ${orderId} not found`);
+    this.name = 'OrderNotFoundError';
+  }
+}
+
+export class InvalidOrderStatusError extends Error {
+  constructor(status: string) {
+    super(`Invalid order status: ${status}`);
+    this.name = 'InvalidOrderStatusError';
+  }
+}
+```
+
+## 🚀 Performance & Scalability
+
+### Database Optimization
+- **Indexing**: Optimized indexes on userId, status, and createdAt fields
+- **Aggregation Pipeline**: Efficient data aggregation for analytics
+- **Connection Pooling**: MongoDB connection pooling for high throughput
+
+### Caching Strategy
+- **Analytics Cache**: Cache computed analytics data for 5 minutes
+- **Order Cache**: Cache frequently accessed orders
+- **Invalidation**: Smart cache invalidation on order updates
+
+### Aggregation Performance
+```typescript
+// Optimized aggregation pipeline for chart data
+const chartData = await Order.aggregate([
+  {
+    $match: {
+      createdAt: { $gte: sixMonthsAgo },
+      status: 'success',
+    },
+  },
+  {
+    $group: {
+      _id: {
+        year: { $year: '$createdAt' },
+        month: { $month: '$createdAt' },
+      },
+      total: { $sum: 1 },
+      revenue: { $sum: '$amount' },
+    },
+  },
+  {
+    $sort: { '_id.year': 1, '_id.month': 1 },
+  },
+]);
+```
+
+## 📊 Analytics Engine
+
+### Chart Data Generation
+The service provides various analytics endpoints for dashboard visualization:
+
+```typescript
+class AnalyticsService {
+  async getTransactionCharts(period: '6months' | '1year' | '2years') {
+    const startDate = this.getStartDate(period);
+
+    const orders = await Order.find({
+      createdAt: { $gte: startDate },
+      status: 'success',
+    });
+
+    return this.aggregateChartData(orders);
+  }
+
+  private aggregateChartData(orders: Order[]) {
+    const monthlyData = new Map();
+
+    orders.forEach(order => {
+      const monthKey = this.getMonthKey(order.createdAt);
+
+      if (!monthlyData.has(monthKey)) {
+        monthlyData.set(monthKey, {
+          month: monthKey,
+          total: 0,
+          successful: 0,
+        });
+      }
+
+      const data = monthlyData.get(monthKey);
+      data.total++;
+      data.successful++;
+    });
+
+    return Array.from(monthlyData.values());
+  }
+}
+```
+
+## 🔒 Security
+
+### Authentication & Authorization
+- **JWT Validation**: Verify admin tokens for admin endpoints
+- **User Isolation**: Users can only access their own orders
+- **Input Validation**: Strict validation of all inputs
+
+### Data Protection
+- **PII Handling**: Secure handling of personal identifiable information
+- **Audit Logging**: Track access to sensitive order data
+
+## 📊 Monitoring & Logging
+
+### Structured Logging
+```typescript
+// Order creation logging
+logger.info('Order created successfully', {
+  orderId: order._id,
+  userId: order.userId,
+  amount: order.amount,
+  productCount: order.products.length,
+  source: 'payment_event',
+});
+
+// Error logging
+logger.error('Failed to create order from payment event', {
+  error: error.message,
+  paymentIntentId: event.data.paymentIntentId,
+  userId: event.data.userId,
+});
+```
+
+### Performance Monitoring
+- **Response Time Tracking**: Monitor API response times
+- **Database Query Performance**: Track slow queries
+- **Event Processing Lag**: Monitor Kafka consumer lag
+
+## 🔧 Development & Deployment
+
+### Environment Configuration
+```bash
+# Required environment variables
+MONGODB_URI=mongodb://localhost:27017/ecom_orders
+KAFKA_BROKERS=localhost:9092
+JWT_SECRET=your-secret-key
+PORT=3005
+```
+
+### Development Setup
+```bash
+# Install dependencies
+pnpm install
+
+# Start MongoDB (via Docker)
+docker run -d -p 27017:27017 mongo:latest
+
+# Start Kafka (via Docker Compose)
+docker-compose -f packages/kafka/docker-compose.yml up -d
+
+# Start development server
+pnpm dev
+```
+
+### Docker Configuration
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+EXPOSE 3005
+CMD ["pnpm", "start"]
+```
+
+## 🧪 Testing
+
+### Test Structure
+- **Unit Tests**: Test individual functions and methods
+- **Integration Tests**: Test API endpoints with test database
+- **Event Tests**: Test Kafka event consumption
+
+### Test Examples
+```typescript
+describe('Order Service', () => {
+  describe('GET /api/orders/user/:userId', () => {
+    it('should return user orders with pagination', async () => {
+      // Create test orders
+      await createTestOrders(userId, 5);
+
+      const response = await request(app)
+        .get(`/api/orders/user/${userId}`)
+        .query({ page: 1, limit: 2 })
+        .expect(200);
+
+      expect(response.body.orders).toHaveLength(2);
+      expect(response.body.totalCount).toBe(5);
+      expect(response.body.totalPages).toBe(3);
+    });
+  });
+
+  describe('payment.successful event', () => {
+    it('should create order from payment event', async () => {
+      const paymentEvent = {
+        eventId: 'test-event-id',
+        eventType: 'payment.successful',
+        timestamp: new Date().toISOString(),
+        data: {
+          userId: 'test-user-id',
+          email: 'test@example.com',
+          amount: 99.99,
+          products: [
+            { name: 'Test Product', quantity: 1, price: 99.99 }
+          ],
+          paymentIntentId: 'pi_test_123',
+        },
+      };
+
+      // Process event
+      await kafkaConsumer.processEvent(paymentEvent);
+
+      // Verify order creation
+      const order = await Order.findOne({
+        userId: 'test-user-id'
+      });
+
+      expect(order).toBeTruthy();
+      expect(order.amount).toBe(99.99);
+    });
+  });
+});
+```
+
+## 🔮 Future Enhancements
+
+### Planned Features
+- **Order Status Tracking**: Real-time order status updates
+- **Inventory Integration**: Automatic inventory reduction on order
+- **Advanced Analytics**: Customer lifetime value and cohort analysis
+- **Order Export**: Export orders to external systems
+- **Fraud Detection**: Basic fraud detection and prevention
+- **Order Splitting**: Support for partial order fulfillment
+
+### Performance Improvements
+- **Read Replicas**: MongoDB read scaling for analytics
+- **Materialized Views**: Pre-computed analytics data
+- **Advanced Caching**: Redis integration for better performance
+- **Database Sharding**: Horizontal scaling for large datasets

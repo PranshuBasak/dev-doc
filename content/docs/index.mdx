@@ -1,0 +1,134 @@
+---
+title: E-commerce Microservices Application
+description: Comprehensive documentation for a full-stack e-commerce platform built with microservices architecture
+---
+
+# E-commerce Microservices Application Documentation
+
+This comprehensive documentation outlines the architecture, features, and technical implementation of a full-stack e-commerce application built with a microservices approach within a Turborepo monorepo. The application emphasizes real-time interactions, scalability, and independent service deployment.
+
+## 🚀 Quick Start
+
+<Card title="View Live Demo" href="https://github.com/PranshuBasak/microservices-ecommerce">
+  View the source code on GitHub
+</Card>
+
+<Card title="Local Development Setup" href="/docs/5-development/setup">
+  Get started with local development
+</Card>
+
+<Card title="API Documentation" href="/docs/6-api-reference/endpoints">
+  Explore API endpoints and schemas
+</Card>
+
+## 🏗️ Architecture Overview
+
+This e-commerce platform is built using a microservices architecture that provides:
+
+- **Scalability**: Independent services that can be scaled individually
+- **Resilience**: Service failures don't bring down the entire platform
+- **Developer Experience**: Monorepo structure with shared packages and consistent tooling
+- **Real-time Communication**: Event-driven architecture using Apache Kafka
+
+### Core Components
+
+<Cards>
+  <Card title="🏪 Client Application" href="/docs/2-applications/client-app">
+    Next.js storefront with product catalog, cart, and checkout
+  </Card>
+
+  <Card title="⚙️ Admin Panel" href="/docs/2-applications/admin-panel">
+    Management interface for products, orders, and users
+  </Card>
+
+  <Card title="🔧 Backend Services" href="/docs/3-services">
+    Microservices for products, orders, payments, auth, and email
+  </Card>
+
+  <Card title="📚 Shared Packages" href="/docs/4-shared-packages">
+    Reusable utilities, types, and configurations
+  </Card>
+</Cards>
+
+## 🛠️ Technology Stack
+
+### Frontend
+- **Framework**: Next.js 15 with React 19
+- **Styling**: Tailwind CSS 4.0
+- **Authentication**: Clerk
+- **Payments**: Stripe.js
+- **State Management**: Zustand
+- **Forms**: React Hook Form with Zod validation
+
+### Backend Services
+- **Runtime**: Node.js 18+
+- **Frameworks**: Express.js, Fastify, Hono
+- **Databases**: PostgreSQL (Prisma ORM), MongoDB (Mongoose)
+- **Message Queue**: Apache Kafka
+- **Authentication**: Clerk API
+- **Email**: Nodemailer with Google Cloud
+
+### Development & Operations
+- **Monorepo**: Turborepo
+- **Language**: TypeScript
+- **Linting**: ESLint with custom configurations
+- **Formatting**: Prettier
+- **Documentation**: Fumadocs with MDX
+
+## 📋 Key Features
+
+### Customer Features
+- **Product Catalog**: Browse, filter, and search products by category, size, color
+- **Shopping Cart**: Add, remove, and manage items with size/color selection
+- **Secure Checkout**: Stripe-integrated payment processing with real-time status updates
+- **Order History**: View past orders and track status
+- **User Authentication**: Social login and email registration via Clerk
+
+### Admin Features
+- **Dashboard**: Key metrics, transaction charts, and analytics
+- **Product Management**: Full CRUD operations with image uploads per color variant
+- **Category Management**: Organize products with hierarchical categories
+- **Order Management**: View and manage all customer orders
+- **User Management**: Admin controls for user accounts
+- **Role-Based Access**: Secure admin-only routes and operations
+
+### Technical Features
+- **Event-Driven Architecture**: Real-time updates via Kafka message queues
+- **Database Flexibility**: PostgreSQL for structured data, MongoDB for flexible schemas
+- **Type Safety**: Full TypeScript coverage with shared type definitions
+- **Scalable Deployment**: Independent service deployment and scaling
+- **Development Tools**: Hot reload, shared configurations, and consistent tooling
+
+## 🚦 Getting Started
+
+1. **Prerequisites**: Node.js 18+, pnpm, Docker (for local databases)
+2. **Clone Repository**: `git clone https://github.com/PranshuBasak/microservices-ecommerce.git`
+3. **Install Dependencies**: `pnpm install`
+4. **Setup Environment**: Copy `.env.example` files and configure services
+5. **Start Development**: `pnpm dev`
+
+For detailed setup instructions, see [Development Setup](/docs/5-development/setup).
+
+## 📖 Documentation Structure
+
+This documentation is organized into the following sections:
+
+1. **[Architecture](/1-architecture)**: System design, microservices overview, and communication patterns
+2. **[Applications](/2-applications)**: Client and admin application features and implementation
+3. **[Services](/3-services)**: Detailed documentation of all backend microservices
+4. **[Shared Packages](/4-shared-packages)**: Reusable utilities, types, and configurations
+5. **[Development](/5-development)**: Setup guides, local development, and deployment
+6. **[API Reference](/6-api-reference)**: Complete API documentation and schemas
+
+## 🤝 Contributing
+
+This project follows standard open-source practices:
+
+- **Issues**: Report bugs and request features via GitHub Issues
+- **Pull Requests**: Follow the existing code style and include tests
+- **Documentation**: Update docs for any new features or changes
+- **Code Style**: ESLint and Prettier configurations ensure consistency
+
+## 📄 License
+
+This project is open source and available under the [MIT License](LICENSE).

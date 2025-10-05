@@ -1,0 +1,567 @@
+---
+title: Email Service
+description: Handles transactional email sending using Nodemailer and Google Cloud
+---
+
+# Email Service
+
+The Email Service handles all transactional email communications for the e-commerce platform. Built with Node.js and integrated with Nodemailer and Google Cloud, it processes email events from Kafka and sends welcome emails, order confirmations, and other notifications.
+
+## 🛠️ Technology Stack
+
+- **Runtime**: Node.js 18+
+- **Email Library**: Nodemailer for email sending
+- **Cloud Provider**: Google Cloud for SMTP services
+- **Events**: Kafka consumer for email events
+- **Templates**: Handlebars for email template rendering
+- **Validation**: Zod for event data validation
+- **Error Handling**: Custom error classes and retry logic
+- **Logging**: Winston for structured logging
+
+## 🏗️ Architecture
+
+### Service Structure
+```
+apps/email-service/
+├── src/
+│   ├── controllers/     # Email processing handlers
+│   ├── services/        # Email sending services
+│   ├── templates/       # Email template files
+│   ├── consumers/       # Kafka event consumers
+│   ├── utils/           # Utility functions
+│   ├── index.ts         # Application entry point
+│   └── types/           # Local type definitions
+├── package.json
+```
+
+### Key Components
+- **Email Processor**: Handles incoming email events
+- **Template Engine**: Renders email templates with dynamic data
+- **SMTP Client**: Manages email sending via Nodemailer
+- **Event Consumer**: Consumes email events from Kafka
+
+## 🔧 Core Functionality
+
+### Email Processing
+
+#### Event-Driven Email Sending
+The service consumes email events from Kafka and sends appropriate emails:
+
+```typescript
+// Email event consumer
+kafkaConsumer.on('user.created', async (event) => {
+  await emailService.sendWelcomeEmail({
+    to: event.data.emailAddress[0],
+    firstName: event.data.firstName,
+    lastName: event.data.lastName,
+  });
+});
+
+kafkaConsumer.on('order.created', async (event) => {
+  await emailService.sendOrderConfirmation({
+    to: event.data.email,
+    orderId: event.data._id,
+    amount: event.data.amount,
+    products: event.data.products,
+  });
+});
+```
+
+### Email Templates
+
+#### Welcome Email Template
+Sends a welcome email to new users with account information.
+
+**Template**: `welcome-email.hbs`
+
+```handlebars
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Welcome to {{appName}}!</title>
+</head>
+<body>
+  <h1>Welcome {{firstName}}!</h1>
+  <p>Thank you for joining {{appName}}. Your account has been successfully created.</p>
+  <p>You can now:</p>
+  <ul>
+    <li>Browse our product catalog</li>
+    <li>Add items to your cart</li>
+    <li>Make secure purchases</li>
+    <li>Track your orders</li>
+  </ul>
+  <p>Happy shopping!</p>
+  <p>The {{appName}} Team</p>
+</body>
+</html>
+```
+
+#### Order Confirmation Template
+Sends order confirmation emails with order details.
+
+**Template**: `order-confirmation.hbs`
+
+```handlebars
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Order Confirmation - {{orderId}}</title>
+</head>
+<body>
+  <h1>Order Confirmation</h1>
+  <p>Hi {{customerName}},</p>
+  <p>Thank you for your order! Here are the details:</p>
+
+  <div>
+    <h3>Order #{{orderId}}</h3>
+    <p><strong>Total: ${{amount}}</strong></p>
+    <p>Status: {{status}}</p>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th>Quantity</th>
+        <th>Price</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each products}}
+      <tr>
+        <td>{{this.name}}</td>
+        <td>{{this.quantity}}</td>
+        <td>${{this.price}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <p>You will receive another email when your order ships.</p>
+  <p>Thank you for shopping with us!</p>
+</body>
+</html>
+```
+
+### Email Service Class
+
+#### Core Email Service
+```typescript
+class EmailService {
+  private transporter: nodemailer.Transporter;
+
+  constructor() {
+    this.transporter = nodemailer.createTransporter({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
+      },
+    });
+  }
+
+  async sendWelcomeEmail(data: {
+    to: string;
+    firstName: string;
+    lastName: string;
+  }) {
+    const template = this.loadTemplate('welcome-email');
+    const html = template({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      appName: process.env.APP_NAME,
+    });
+
+    await this.sendEmail({
+      to: data.to,
+      subject: `Welcome to ${process.env.APP_NAME}!`,
+      html,
+    });
+  }
+
+  async sendOrderConfirmation(data: {
+    to: string;
+    orderId: string;
+    amount: number;
+    products: Array<{
+      name: string;
+      quantity: number;
+      price: number;
+    }>;
+  }) {
+    const template = this.loadTemplate('order-confirmation');
+    const html = template({
+      customerName: data.to,
+      orderId: data.orderId,
+      amount: data.amount.toFixed(2),
+      products: data.products,
+    });
+
+    await this.sendEmail({
+      to: data.to,
+      subject: `Order Confirmation - ${data.orderId}`,
+      html,
+    });
+  }
+
+  private async sendEmail(options: {
+    to: string;
+    subject: string;
+    html: string;
+    attachments?: Array<{
+      filename: string;
+      content: Buffer | string;
+    }>;
+  }) {
+    try {
+      const result = await this.transporter.sendMail({
+        from: process.env.FROM_EMAIL,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        attachments: options.attachments,
+      });
+
+      logger.info('Email sent successfully', {
+        to: options.to,
+        subject: options.subject,
+        messageId: result.messageId,
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('Failed to send email', {
+        to: options.to,
+        subject: options.subject,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+}
+```
+
+## 🔄 Event Consumption
+
+The Email Service consumes various events from Kafka:
+
+### User Events
+
+#### user.created
+Sends welcome email when a new user registers.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'user.created';
+  timestamp: string;
+  data: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    emailAddress: string[];
+    role: 'admin' | 'user';
+  };
+}
+```
+
+#### user.updated
+Sends notification email when user profile is updated (future feature).
+
+### Order Events
+
+#### order.created
+Sends order confirmation email when an order is placed.
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'order.created';
+  timestamp: string;
+  data: {
+    _id: string;
+    userId: string;
+    email: string;
+    amount: number;
+    status: 'success' | 'failed';
+    products: Array<{
+      name: string;
+      quantity: number;
+      price: number;
+    }>;
+  };
+}
+```
+
+### Payment Events
+
+#### payment.successful
+Sends payment confirmation email (alternative to order confirmation).
+
+**Event Payload**:
+```typescript
+{
+  eventId: string;
+  eventType: 'payment.successful';
+  timestamp: string;
+  data: {
+    userId: string;
+    email: string;
+    amount: number;
+    paymentIntentId: string;
+  };
+}
+```
+
+## 🛡️ Error Handling & Retry Logic
+
+### Retry Configuration
+```typescript
+const retryConfig = {
+  maxRetries: 3,
+  initialDelay: 1000, // 1 second
+  maxDelay: 30000,   // 30 seconds
+  backoffFactor: 2,
+};
+
+async function sendEmailWithRetry(emailOptions: EmailOptions) {
+  let lastError: Error;
+
+  for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
+    try {
+      return await emailService.sendEmail(emailOptions);
+    } catch (error) {
+      lastError = error;
+
+      if (attempt < retryConfig.maxRetries) {
+        const delay = Math.min(
+          retryConfig.initialDelay * Math.pow(retryConfig.backoffFactor, attempt),
+          retryConfig.maxDelay
+        );
+
+        logger.warn(`Email send failed, retrying in ${delay}ms`, {
+          attempt: attempt + 1,
+          maxRetries: retryConfig.maxRetries,
+          error: error.message,
+        });
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  logger.error('Email send failed after all retries', {
+    maxRetries: retryConfig.maxRetries,
+    error: lastError.message,
+  });
+
+  throw lastError;
+}
+```
+
+### Error Types
+```typescript
+// Custom error classes
+export class EmailSendError extends Error {
+  constructor(message: string, public originalError?: Error) {
+    super(message);
+    this.name = 'EmailSendError';
+  }
+}
+
+export class TemplateNotFoundError extends Error {
+  constructor(templateName: string) {
+    super(`Email template '${templateName}' not found`);
+    this.name = 'TemplateNotFoundError';
+  }
+}
+
+export class InvalidEmailDataError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidEmailDataError';
+  }
+}
+```
+
+## 🚀 Performance & Scalability
+
+### Email Queue Management
+- **Asynchronous Processing**: Non-blocking email sending
+- **Queue Management**: Handle email bursts during peak times
+- **Rate Limiting**: Respect email provider rate limits
+
+### Template Caching
+- **Template Preloading**: Load and cache email templates at startup
+- **Hot Reloading**: Reload templates in development mode
+- **Memory Management**: Efficient template memory usage
+
+## 📊 Monitoring & Logging
+
+### Email Analytics
+- **Send Success Rate**: Track email delivery success rates
+- **Bounce Tracking**: Monitor bounced emails and handle accordingly
+- **Template Performance**: Track which templates are most used
+- **Delivery Time**: Monitor email delivery times
+
+### Structured Logging
+```typescript
+// Email send success
+logger.info('Email sent successfully', {
+  to: emailOptions.to,
+  subject: emailOptions.subject,
+  template: templateName,
+  processingTime: Date.now() - startTime,
+});
+
+// Email send failure
+logger.error('Email send failed', {
+  to: emailOptions.to,
+  subject: emailOptions.subject,
+  template: templateName,
+  error: error.message,
+  stack: error.stack,
+});
+```
+
+## 🔧 Development & Deployment
+
+### Environment Configuration
+```bash
+# Required environment variables
+GMAIL_USER=your-email@gmail.com
+GMAIL_APP_PASSWORD=your-app-password
+FROM_EMAIL=noreply@yourstore.com
+APP_NAME=Your Store Name
+KAFKA_BROKERS=localhost:9092
+```
+
+### Gmail Setup
+1. **Enable 2FA**: Enable two-factor authentication on Gmail account
+2. **Generate App Password**: Create app password for Nodemailer
+3. **Configure Environment**: Set up Gmail credentials in environment variables
+
+### Development Setup
+```bash
+# Install dependencies
+pnpm install
+
+# Start Kafka consumer
+# Make sure Kafka is running and topics exist
+
+# Start development server
+pnpm dev
+```
+
+### Docker Configuration
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+CMD ["pnpm", "start"]
+```
+
+## 🧪 Testing
+
+### Test Structure
+- **Unit Tests**: Test email template rendering and validation
+- **Integration Tests**: Test email sending with test SMTP server
+- **Event Tests**: Test Kafka event consumption and processing
+
+### Test Examples
+```typescript
+describe('Email Service', () => {
+  let emailService: EmailService;
+
+  beforeEach(() => {
+    emailService = new EmailService();
+  });
+
+  describe('sendWelcomeEmail', () => {
+    it('should send welcome email successfully', async () => {
+      const emailData = {
+        to: 'test@example.com',
+        firstName: 'John',
+        lastName: 'Doe',
+      };
+
+      // Mock nodemailer
+      const sendMailSpy = jest.spyOn(emailService.transporter, 'sendMail')
+        .mockResolvedValue({ messageId: 'test-message-id' } as any);
+
+      const result = await emailService.sendWelcomeEmail(emailData);
+
+      expect(sendMailSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'test@example.com',
+          subject: expect.stringContaining('Welcome'),
+          html: expect.stringContaining('John'),
+        })
+      );
+    });
+  });
+
+  describe('Event Processing', () => {
+    it('should process user.created event', async () => {
+      const userEvent = {
+        eventId: 'test-event-id',
+        eventType: 'user.created',
+        timestamp: new Date().toISOString(),
+        data: {
+          id: 'user-123',
+          firstName: 'Jane',
+          lastName: 'Smith',
+          emailAddress: ['jane@example.com'],
+          role: 'user',
+        },
+      };
+
+      // Mock email service
+      const sendEmailSpy = jest.spyOn(emailService, 'sendWelcomeEmail')
+        .mockResolvedValue();
+
+      await kafkaConsumer.processEvent(userEvent);
+
+      expect(sendEmailSpy).toHaveBeenCalledWith({
+        to: 'jane@example.com',
+        firstName: 'Jane',
+        lastName: 'Smith',
+      });
+    });
+  });
+});
+```
+
+## 🔮 Future Enhancements
+
+### Planned Features
+- **Advanced Templates**: Rich HTML templates with inline CSS
+- **Email Analytics**: Track open rates, click rates, and conversions
+- **A/B Testing**: Test different email templates and subject lines
+- **Personalization**: Dynamic content based on user preferences
+- **Unsubscribe Management**: Handle email preferences and unsubscribes
+- **SMS Integration**: Send SMS notifications for urgent updates
+
+### Template Enhancements
+- **Drag-and-Drop Editor**: Visual email template editor (future admin feature)
+- **Template Variables**: Dynamic template variables and conditional content
+- **Responsive Design**: Mobile-optimized email templates
+- **Dark Mode Support**: Email templates that adapt to user preferences
+
+### Integration Improvements
+- **Multiple Providers**: Support for SendGrid, AWS SES, and other providers
+- **Webhook Support**: Receive delivery status webhooks from email providers
+- **Batch Sending**: Efficient bulk email sending for marketing campaigns
+- **Internationalization**: Multi-language email template support
+
+### Monitoring Enhancements
+- **Advanced Analytics**: Detailed email performance metrics
+- **Spam Monitoring**: Track spam complaints and reputation
+- **Geographic Tracking**: Email engagement by geographic region
+- **Device Tracking**: Email client and device analytics
