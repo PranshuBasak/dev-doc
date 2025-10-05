@@ -1,6 +1,18 @@
-import Link from 'next/link';
-import { ArrowRight, BookOpen, Code, Database, ShoppingCart, Sparkles, Zap, Shield, Linkedin, ExternalLink, User } from 'lucide-react';
-import type { ReactNode } from 'react';
+import Link from "next/link";
+import {
+  ArrowRight,
+  BookOpen,
+  Code,
+  Database,
+  ShoppingCart,
+  Sparkles,
+  Zap,
+  Shield,
+  Linkedin,
+  ExternalLink,
+  User,
+} from "lucide-react";
+import type { ReactNode } from "react";
 
 interface FeatureCardProps {
   icon: ReactNode;
@@ -12,7 +24,9 @@ interface FeatureCardProps {
 function FeatureCard({ icon, title, description, gradient }: FeatureCardProps) {
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:border-primary/50">
-      <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 ${gradient}`} />
+      <div
+        className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 ${gradient}`}
+      />
       <div className="relative z-10">
         <div className="mb-4 inline-flex items-center justify-center rounded-xl bg-primary/10 p-3 transition-transform duration-300 group-hover:scale-110">
           {icon}
@@ -47,7 +61,10 @@ export default function HomePage() {
         <div className="absolute inset-0 -z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-purple-500/5 to-pink-500/5" />
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-float" />
-          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }} />
+          <div
+            className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-float"
+            style={{ animationDelay: "2s" }}
+          />
         </div>
 
         <div className="mx-auto max-w-5xl text-center relative z-10">
@@ -64,7 +81,9 @@ export default function HomePage() {
           </h1>
 
           <p className="mb-10 text-lg text-muted-foreground sm:text-xl max-w-3xl mx-auto leading-relaxed">
-            Comprehensive documentation for a full-stack e-commerce application built with modern microservices architecture, event-driven design, and best practices.
+            Comprehensive documentation for a full-stack e-commerce application
+            built with modern microservices architecture, event-driven design,
+            and best practices.
           </p>
 
           {/* CTA Buttons */}
@@ -104,7 +123,8 @@ export default function HomePage() {
               What&apos;s <span className="gradient-text">Inside</span>
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              A complete ecosystem of modern technologies and architectural patterns
+              A complete ecosystem of modern technologies and architectural
+              patterns
             </p>
           </div>
 
@@ -157,7 +177,7 @@ export default function HomePage() {
       {/* Developer Section */}
       <section className="relative border-t px-4 py-24 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-purple-500/5 -z-10" />
-        
+
         <div className="mx-auto max-w-4xl">
           <div className="text-center mb-12">
             <h2 className="mb-4 text-4xl font-bold">
@@ -171,7 +191,7 @@ export default function HomePage() {
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary to-purple-500 rounded-full blur-xl opacity-50" />
                 <img
-                  src="https://res.cloudinary.com/dc2tldczs/image/upload/v1759687964/1759686003033_cldmnn_b82ffe.png"
+                  src="https://res.cloudinary.com/dc2tldczs/image/upload/f_auto,q_auto/v1759687964/1759686003033_cldmnn_b82ffe.png"
                   alt="Pranshu Basak - Developer"
                   width={150}
                   height={150}
@@ -183,7 +203,8 @@ export default function HomePage() {
               <div className="flex-1 text-center md:text-left">
                 <h3 className="mb-2 text-2xl font-bold">Pranshu Basak</h3>
                 <p className="mb-6 text-muted-foreground leading-relaxed">
-                  Passionate Software Engineer crafting innovative web solutions with Next.js, MERN, and Creatio Developer.
+                  Passionate Software Engineer crafting innovative web solutions
+                  with Next.js, MERN, and Creatio Developer.
                 </p>
 
                 {/* Links */}
@@ -227,13 +248,14 @@ export default function HomePage() {
       {/* CTA Section */}
       <section className="relative border-t px-4 py-24">
         <div className="absolute inset-0 bg-gradient-to-t from-primary/5 to-transparent -z-10" />
-        
+
         <div className="mx-auto max-w-4xl text-center">
           <h2 className="mb-4 text-4xl font-bold">
             Ready to <span className="gradient-text">Get Started?</span>
           </h2>
           <p className="mb-10 text-lg text-muted-foreground max-w-2xl mx-auto">
-            Follow our comprehensive setup guide to get the entire platform running locally in minutes.
+            Follow our comprehensive setup guide to get the entire platform
+            running locally in minutes.
           </p>
 
           <Link
